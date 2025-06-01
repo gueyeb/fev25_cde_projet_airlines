@@ -1,0 +1,48 @@
+{
+    "weather": {
+        "bsonType": "object",
+        "required": [
+            "airport",
+            "timestamp",
+            "valid_until",
+            "weather"
+        ],
+        "properties": {
+            "airport": {
+                "bsonType": "string"
+            },
+            "timestamp": {
+                "bsonType": "date"
+            },
+            "valid_until": {
+                "bsonType": "date"
+            },
+            "weather": {
+                "bsonType": "object",
+                "required": [
+                    "temperature",
+                    "wind_speed",
+                    "visibility",
+                    "conditions"
+                ],
+                "properties": {
+                    "temperature": {
+                        "bsonType": "double"
+                    },
+                    "wind_speed": {
+                        "bsonType": "double"
+                    },
+                    "visibility": {
+                        "bsonType": "int"
+                    },
+                    "conditions": {
+                        "bsonType": "array",
+                        "items": {
+                            "bsonType": "string"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

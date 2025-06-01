@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: postgres_dst
+    restart: always
+    environment:
+      POSTGRES_DB: dst_airlines
+      POSTGRES_USER: dst_user
+      POSTGRES_PASSWORD: dst_password
+    ports:
+      - "5438:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - dst_net
+
+  mongodb:
+    image: mongo:6
+    container_name: mongo_dst
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - dst_net
+
+volumes:
+  pg_data:
+  mongo_data:
+
+networks:
+  dst_net:
+    driver: bridge
