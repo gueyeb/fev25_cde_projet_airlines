@@ -25,6 +25,8 @@ dst-airlines/
 │   └── dst_airline_er_diagram.png
 │   └── rapports/
 │   └── BTS_USA/
+│      └── Airline_Delay_Cause.csv
+│      └── Download_Column_Definitions.xlsx
 ├── docker-compose.yml
 ├── ingestion/
 │   └── lufthansa_to_postgresql.py
