@@ -3,7 +3,16 @@ from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 import pandas as pd
 import os
+import sys
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from functions.pg_functions import getAirPorts, insert_dataframe
+from config.env_loader import load_env
+
+load_env()
+
+BASE_URL = os.getenv("LUFTHANSA_BASE_URL")
+ACCESS_TOKEN = os.getenv("LUFTHANSA_ACCESS_TOKEN")
 
 
 iata_codes = getAirPorts()
