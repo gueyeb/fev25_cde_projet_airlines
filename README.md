@@ -41,6 +41,19 @@ dst-airlines/
 └── README.md
 ```
 
+## 🛠️ Prérequis
+
+Avant de lancer le projet, assurez-vous d'avoir installé :
+
+- **Python 3.8+**
+- **pip** (gestionnaire de paquets Python)
+- **Docker** et **docker-compose** (pour l'orchestration des services)
+- Les dépendances Python du projet :
+
+```bash
+pip install -r requirements.txt
+```
+
 ## 🚀 Lancement rapide
 
 1. Cloner le projet
@@ -53,7 +66,7 @@ docker-compose up -d
 
 Alternativement, vous pouvez lancer une base postgreSQL/noSQL en local ou sur le cloud, et renseignez les informations de connexion dans le fichier `config/.env`
 
-4. Exécuter les scripts d’insertion :
+4. Exécuter les scripts d'insertion :
 
 ```bash
 python database/insert_lufthansa_references_data.py
