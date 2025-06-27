@@ -1,5 +1,9 @@
 import os
+import sys
 from urllib.parse import urlparse, parse_qs
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pandas as pd
 import requests
@@ -255,8 +259,8 @@ def sync_aircrafts():
 
 if __name__ == "__main__":
     print("🚀 Début de la synchronisation des données de référence 🚀")
-     # sync_countries()
-     #  sync_cities()
-     # sync_airports()
-     # sync_airlines()
-     # sync_aircrafts()
+    # sync_countries()
+    # sync_cities()
+    # sync_airports()
+    # sync_airlines()
+    # sync_aircrafts()
