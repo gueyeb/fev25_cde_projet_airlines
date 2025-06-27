@@ -1,8 +1,7 @@
--- Fixed PostgreSQL schema for DST Airlines project
--- Run this on your Supabase database
+-- PostgreSQL schema for DST Airlines project
 
 -- Create sequences first (if needed)
-CREATE SEQUENCE IF NOT EXISTS bts_data_history_id_seq;
+CREATE SEQUENCE IF NOT EXISTS bts_flight_history_id_seq;
 
 -- public.aircrafts definition
 CREATE TABLE IF NOT EXISTS public.aircrafts (
@@ -97,9 +96,9 @@ CREATE TABLE IF NOT EXISTS public.historical_flights (
 	"source" varchar(20) NOT NULL,
 	delay_minutes int4 NULL,
 	is_delayed bool NULL,
-	bts_data_history_id int4 NULL,
+	bts_flight_history_id int4 NULL,
 	CONSTRAINT historical_flights_pkey PRIMARY KEY (id),
-	CONSTRAINT historical_flights_bts_data_history_id_fkey FOREIGN KEY (bts_data_history_id) REFERENCES public.bts_flight_history(id)
+	CONSTRAINT historical_flights_bts_flight_history_id_fkey FOREIGN KEY (bts_flight_history_id) REFERENCES public.bts_flight_history(id)
 );
 
 -- public.lufthansa_flight_history definition

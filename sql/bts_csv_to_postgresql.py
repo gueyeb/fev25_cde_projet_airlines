@@ -5,7 +5,7 @@ from functions.pg_functions import insert_dataframe
 
 load_env()
 
-def load_bts_csv(file_path, table_name="bts_data_history"):
+def load_bts_csv(file_path, table_name="bts_flight_history"):
     df = pd.read_csv(file_path, sep=",", encoding="ISO-8859-1")
     insert_dataframe(df, table_name)
 

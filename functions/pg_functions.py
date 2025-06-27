@@ -51,7 +51,7 @@ def city_exists(code):
         return result.fetchone() is not None
 
 def build_historical_flights_from_bts():
-    df = pd.read_sql("SELECT * FROM bts_data_history", engine)
+    df = pd.read_sql("SELECT * FROM bts_flight_history", engine)
 
     # Construction des données pour historical_flights
     flights = []
@@ -70,7 +70,7 @@ def build_historical_flights_from_bts():
             "source": "BTS",
             "delay_minutes": int(row['arr_delay']) if not pd.isna(row['arr_delay']) else None,
             "is_delayed": bool(row['arr_del15']) if not pd.isna(row['arr_del15']) and row['arr_del15'] > 0 else False,
-            "bts_data_history_id": row['id']
+            "bts_flight_history_id": row['id']
         })
 
     flights_df = pd.DataFrame(flights)
