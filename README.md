@@ -11,7 +11,7 @@ Projet de collecte, enrichissement et prédiction de retards de vols basé sur d
 
 ## 📦 Structure du projet
 
-```
+``` bash
 dst-airlines/
 ├── config/.env.example
 ├── database/
@@ -21,6 +21,10 @@ dst-airlines/
 ├── documentation/
 │   ├── uml_model.pdf
 │   └── api_endpoints.xlsx
+│   └── DST Airlines.pdf
+│   └── dst_airline_er_diagram.png
+│   └── rapports/
+│   └── BTS_USA/
 ├── docker-compose.yml
 ├── ingestion/
 │   └── lufthansa_to_postgresql.py
