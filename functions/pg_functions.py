@@ -1,5 +1,5 @@
 import os
-
+from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy import text
 from config.env_loader import load_env
@@ -14,9 +14,11 @@ DBNAME = os.getenv("PG_DB")
 USER = os.getenv("PG_USER")
 PASSWORD = os.getenv("PG_PASSWORD")
 
+# URL-encode the password to handle special characters
+PASSWORD_ENCODED = quote_plus(PASSWORD)
 
-# Connexion PostgreSQL
-DB_URL = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+# Connexion PostgreSQL with properly encoded password
+DB_URL = f"postgresql://{USER}:{PASSWORD_ENCODED}@{HOST}:{PORT}/{DBNAME}"
 engine = create_engine(DB_URL)
 
 def insert_dataframe(df, table_name, batch_size=5000):
@@ -49,17 +51,17 @@ def city_exists(code):
         return result.fetchone() is not None
 
 def build_historical_flights_from_bts():
-    df = pd.read_sql("SELECT * FROM bts_data_history", engine)
+    df = pd.read_sql("SELECT * FROM bts_flight_history", engine)
 
     # Construction des données pour historical_flights
     flights = []
 
     """
         => df.iterrows()	Méthode Pandas qui retourne un générateur de paires (index, row) où :
-                • index est l’index de la ligne
+                • index est l'index de la ligne
                 • row est un objet Series représentant la ligne
         => for _, row in ...	
-            La variable _ capte l’index, mais on ne s’en sert pas, donc on le nomme _ par convention
+            La variable _ capte l'index, mais on ne s'en sert pas, donc on le nomme _ par convention
         => row	
             Est une ligne du DataFrame sous forme de dictionnaire Pandas (row["colonne"])
     """
@@ -68,7 +70,7 @@ def build_historical_flights_from_bts():
             "source": "BTS",
             "delay_minutes": int(row['arr_delay']) if not pd.isna(row['arr_delay']) else None,
             "is_delayed": bool(row['arr_del15']) if not pd.isna(row['arr_del15']) and row['arr_del15'] > 0 else False,
-            "bts_data_history_id": row['id']
+            "bts_flight_history_id": row['id']
         })
 
     flights_df = pd.DataFrame(flights)

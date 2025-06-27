@@ -4,14 +4,14 @@ Projet de collecte, enrichissement et prédiction de retards de vols basé sur d
 
 ## 👥 Membres du groupe
 
-- AKPONA Christian
-- BABACAR Gueye
-- Yacine
-- Aurince
+- Christian AKPONA
+- Babacar GUEYE
+- Yacine BIBRAS
+- Aurince Judicaël AKAKPO
 
 ## 📦 Structure du projet
 
-```
+``` bash
 dst-airlines/
 ├── config/.env.example
 ├── database/
@@ -21,6 +21,12 @@ dst-airlines/
 ├── documentation/
 │   ├── uml_model.pdf
 │   └── api_endpoints.xlsx
+│   └── DST Airlines.pdf
+│   └── dst_airline_er_diagram.png
+│   └── rapports/
+│   └── BTS_USA/
+│      └── Airline_Delay_Cause.csv
+│      └── Download_Column_Definitions.xlsx
 ├── docker-compose.yml
 ├── ingestion/
 │   └── lufthansa_to_postgresql.py
@@ -35,15 +41,33 @@ dst-airlines/
 └── README.md
 ```
 
+## 🛠️ Prérequis
+
+Avant de lancer le projet, assurez-vous d'avoir installé :
+
+- **Python 3.8+**
+- **pip** (gestionnaire de paquets Python)
+- **Docker** et **docker-compose** (pour l'orchestration des services)
+- Les dépendances Python du projet :
+
+```bash
+pip install -r requirements.txt
+```
+
 ## 🚀 Lancement rapide
 
 1. Cloner le projet
-2. Copier `.env.example` en `.env` et configurer vos clés API
+2. Copier `config/.env.example` en `config/.env` et configurer vos clés API
 3. Lancer les bases de données :
+
 ```bash
 docker-compose up -d
 ```
-4. Exécuter les scripts d’insertion :
+
+Alternativement, vous pouvez lancer une base postgreSQL/noSQL en local ou sur le cloud, et renseignez les informations de connexion dans le fichier `config/.env`
+
+4. Exécuter les scripts d'insertion :
+
 ```bash
 python database/insert_lufthansa_references_data.py
 python nosql/fetch_weather_to_mongodb.py
