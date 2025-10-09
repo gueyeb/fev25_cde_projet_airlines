@@ -1,0 +1,138 @@
+import json
+
+from sqlalchemy import text
+
+from functions.pg_functions import engine
+from functions.pg_functions import getFlightsToUpdateToday, get_route_airports, pd
+from functions.utils_functions import _safe_get, cached_weather, get_airport_from_postgres_byAirPortCode_cached, fetch_paginated, \
+    parse_any, to_bucket_iso
+
+
+def update_lufthansa_flight_history():
+    """
+    Met à jour UNIQUEMENT les vols du jour dont actuals_refreshed = false :
+      - récupère horaires réels (Lufthansa flightstatus),
+      - recalcule la météo aux horaires RÉELS (fallback programmés),
+      - UPDATE des colonnes + flag actuals_refreshed=true.
+    Requiert :
+      - getFlightsToUpdateToday()
+      - _safe_get(), split_iso(), parse_any(), to_bucket_iso()
+      - cached_weather(...), get_route_airports(...),
+        get_airport_from_postgres_byAirPortCode_cached(...)
+    """
+    df = getFlightsToUpdateToday()
+    if df.empty:
+        print("ℹ️ Aucun vol du jour à rafraîchir (déjà à jour ou aucun vol).")
+        return
+
+    for _, row in df.iterrows():
+        try:
+            flight_id = int(row["id"])
+            airline   = row["marketing_carrier_airline_id"]
+            flight_no = row["marketing_carrier_flight_number"]
+
+            dep_sched_d = row["departure_schedule_date"]
+            dep_sched_t = row["departure_schedule_time"]
+            arr_sched_d = row["arrival_schedule_date"]
+            arr_sched_t = row["arrival_schedule_time"]
+
+            # Date pour l’endpoint flightstatus
+            if pd.isna(dep_sched_d):
+                if pd.isna(arr_sched_d):
+                    print(f"⏭️ Skip vol id={flight_id} (pas de date planifiée)")
+                    continue
+                date_str = arr_sched_d.strftime("%Y-%m-%d")
+            else:
+                date_str = dep_sched_d.strftime("%Y-%m-%d")
+
+            endpoint = f"/operations/flightstatus/{airline}{flight_no}/{date_str}"
+            data = fetch_paginated(endpoint, "FlightStatusResource.Flights.Flight")
+            if not data:
+                print(f"⚠️ Pas de flightstatus pour {airline}{flight_no} {date_str}")
+                continue
+
+            flights = data if isinstance(data, list) else [data]
+            f = flights[0]
+
+            # Horaires réels (fallback programmés) via helpers globaux
+            dep_time_real_iso = (
+                    _safe_get(f, "Departure", "ActualTimeLocal", "DateTime")
+                    or _safe_get(f, "Departure", "ActualTimeUTC",   "DateTime")
+            )
+            arr_time_real_iso = (
+                    _safe_get(f, "Arrival",   "ActualTimeLocal", "DateTime")
+                    or _safe_get(f, "Arrival", "ActualTimeUTC",   "DateTime")
+            )
+
+            dep_real_d, dep_real_t, dep_dt = parse_any(dep_time_real_iso, dep_sched_d, dep_sched_t)
+            arr_real_d, arr_real_t, arr_dt = parse_any(arr_time_real_iso, arr_sched_d, arr_sched_t)
+
+            dep_terminal = _safe_get(f, "Departure", "Terminal", "Name") or row.get("departure_terminal")
+            arr_terminal = _safe_get(f, "Arrival",   "Terminal", "Name") or row.get("arrival_terminal")
+
+            delay_dep = _safe_get(f, "Departure", "TimeStatus", "Delay")
+            delay_arr = _safe_get(f, "Arrival",   "TimeStatus", "Delay")
+
+            # Aéroports et TZ
+            dep_iata, arr_iata = get_route_airports(int(row["route_id"])) if pd.notna(row["route_id"]) else (None, None)
+            dep_info = get_airport_from_postgres_byAirPortCode_cached(dep_iata) if dep_iata else None
+            arr_info = get_airport_from_postgres_byAirPortCode_cached(arr_iata) if arr_iata else None
+
+            # Buckets horaires (1h par défaut ; passer hours=3 si tu veux coller au pas 3h d’OWM)
+            dep_meteo = None
+            if dep_dt and dep_info:
+                dep_bucket_iso = to_bucket_iso(dep_dt, hours=1)
+                dep_meteo = cached_weather(
+                    dep_iata, dep_info["lat"], dep_info["lon"], dep_bucket_iso, dep_info.get("timezone")
+                )
+
+            arr_meteo = None
+            if arr_dt and arr_info:
+                arr_bucket_iso = to_bucket_iso(arr_dt, hours=1)
+                arr_meteo = cached_weather(
+                    arr_iata, arr_info["lat"], arr_info["lon"], arr_bucket_iso, arr_info.get("timezone")
+                )
+
+            # UPDATE + flag actuals_refreshed
+            update_stmt = text("""
+                UPDATE lufthansa_flight_history
+                SET
+                    real_departure_schedule_date = :dep_date,
+                    real_departure_schedule_time = :dep_time,
+                    real_arrival_schedule_date   = :arr_date,
+                    real_arrival_schedule_time   = :arr_time,
+                    departure_terminal           = :dep_terminal,
+                    arrival_terminal             = :arr_terminal,
+                    delay_on_departure           = :delay_dep,
+                    delay_on_arrival             = :delay_arr,
+                    depart_airport_meteo         = COALESCE(:dep_meteo::jsonb, depart_airport_meteo),
+                    arr_airport_meteo            = COALESCE(:arr_meteo::jsonb,  arr_airport_meteo),
+                    actuals_refreshed            = true,
+                    actuals_refreshed_at         = now()
+                WHERE id = :flight_id
+                  AND actuals_refreshed = false
+            """)
+
+            params = {
+                "dep_date": dep_real_d,
+                "dep_time": dep_real_t,
+                "arr_date": arr_real_d,
+                "arr_time": arr_real_t,
+                "dep_terminal": dep_terminal,
+                "arr_terminal": arr_terminal,
+                "delay_dep": delay_dep,
+                "delay_arr": delay_arr,
+                "dep_meteo": json.dumps(dep_meteo) if dep_meteo is not None else None,
+                "arr_meteo": json.dumps(arr_meteo) if arr_meteo is not None else None,
+                "flight_id": flight_id
+            }
+
+            with engine.begin() as connection:
+                res = connection.execute(update_stmt, params)
+                if res.rowcount == 0:
+                    print(f"ℹ️ Vol {airline}{flight_no} déjà rafraîchi ou non éligible.")
+                else:
+                    print(f"✔️ Vol {airline}{flight_no} mis à jour (réels + météo) et flaggé.")
+
+        except Exception as e:
+            print(f"❌ Erreur enrichissement {row.get('marketing_carrier_airline_id')}{row.get('marketing_carrier_flight_number')} : {e}")

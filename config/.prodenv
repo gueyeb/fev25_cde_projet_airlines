@@ -1,0 +1,19 @@
+# Lufthansa API Credentials
+LH_CLIENT_ID=f5t27gbgy2b2tw5dwchn2tsqw
+LH_CLIENT_SECRET=DMWm6n8w7k
+LUFTHANSA_BASE_URL=https://api.lufthansa.com/v1
+
+# PostgreSQL Configuration
+# REMOTE
+PG_HOST=aws-0-eu-west-3.pooler.supabase.com
+PG_PORT=5432
+PG_DB=postgres
+PG_USER=postgres.inxqyxxawrpdooimiaef
+PG_PASSWORD=s)WY@dd24CsF8zy
+
+# OpenWeatherMap API Key
+OWM_API_KEY=f389ccd0297700b7288618bbbb5e48eb
+# OPENWEATHERMAP_BASE_URL=https://api.openweathermap.org/data/2.5/weather
+OWM_EXCLUDE=minutely,daily,alerts,current
+# Budget/jour OWM (sur 1000 en free) — marge de sécurité
+OWM_DAILY_BUDGET=900

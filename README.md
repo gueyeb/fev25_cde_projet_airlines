@@ -15,7 +15,7 @@ Projet de collecte, enrichissement et prédiction de retards de vols basé sur d
 dst-airlines/
 ├── config/.env.example
 ├── database/
-│   ├── create_tables.sql
+│   ├── 1_create_tables.sql
 │   ├── insert_lufthansa.py
 │   └── data_sources.xlsx
 ├── documentation/
@@ -45,6 +45,8 @@ docker-compose up -d
 ```
 4. Exécuter les scripts d’insertion :
 ```bash
+pip install -r requirements.txt
+
 python database/insert_lufthansa_references_data.py
 python nosql/fetch_weather_to_mongodb.py
 ```
