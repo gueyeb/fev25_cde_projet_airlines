@@ -1,6 +1,6 @@
-from functions.pg_functions import city_exists
-from functions.pg_functions import insert_dataframe, pd
-from functions.utils_functions import fetch_paginated, verify_then_sync
+from src.utils.pg_functions import city_exists
+from src.utils.pg_functions import insert_dataframe, pd
+from src.utils.utils_functions import fetch_paginated, verify_then_sync
 
 
 def sync_airports():

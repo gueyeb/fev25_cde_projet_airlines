@@ -1,0 +1,119 @@
+<!-- frontend/templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DST Airlines - Flight Delay Predictor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="text-center mb-0">✈️ Flight Delay Prediction</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="prediction-form">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="flight-number" class="form-label">Flight Number</label>
+                                    <input type="text" class="form-control" id="flight-number" placeholder="LH400" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="airline" class="form-label">Airline</label>
+                                    <select class="form-select" id="airline">
+                                        <option value="">Select Airline</option>
+                                        <option value="LH">Lufthansa</option>
+                                        <option value="AF">Air France</option>
+                                        <option value="BA">British Airways</option>
+                                        <option value="DL">Delta Air Lines</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="departure-airport" class="form-label">
+                                        <i class="bi bi-airplane-engines me-1"></i>Departure Airport
+                                    </label>
+                                    <select class="form-select" id="departure-airport" required>
+                                        <option value="">Select Departure Airport</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="arrival-airport" class="form-label">
+                                        <i class="bi bi-geo-alt me-1"></i>Arrival Airport
+                                    </label>
+                                    <select class="form-select" id="arrival-airport" required>
+                                        <option value="">Select Arrival Airport</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="scheduled-date" class="form-label">Date</label>
+                                    <input type="date" class="form-control" id="scheduled-date" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="scheduled-time" class="form-label">Time</label>
+                                    <input type="time" class="form-control" id="scheduled-time" required>
+                                </div>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Predict Delay</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Results Card -->
+                <div id="results-card" class="card shadow mt-4 d-none">
+                    <div class="card-header bg-info text-white">
+                        <h4 class="mb-0">Prediction Results</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="prediction-gauge">
+                                    <h5>Delay Probability</h5>
+                                    <div class="progress mb-2" style="height: 25px;">
+                                        <div id="delay-probability-bar" class="progress-bar" role="progressbar"></div>
+                                    </div>
+                                    <p id="delay-probability-text" class="text-center fw-bold"></p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="prediction-gauge">
+                                    <h5>Estimated Delay</h5>
+                                    <p id="delay-estimate" class="display-4 text-center text-primary"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Contributing Factors</h5>
+                                    <ul id="factors-list" class="list-group">
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>Factor Analysis</h5>
+                                    <canvas id="factors-chart" width="300" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="/static/js/script.js"></script>
+</body>
+</html>

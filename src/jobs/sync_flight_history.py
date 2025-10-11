@@ -1,8 +1,8 @@
 # sync_flight_history.py
-from functions.pg_functions import getImportantRoutes
-from functions.pg_functions import insert_dataframe, date
-from functions.utils_functions import fetch_schedules, _safe_get, _parse_sched_datetime, cached_weather
-from functions.utils_functions import get_airport_from_postgres_byAirPortCode_cached
+from src.utils.pg_functions import getImportantRoutes
+from src.utils.pg_functions import insert_dataframe, date
+from src.utils.utils_functions import fetch_schedules, _safe_get, _parse_sched_datetime, cached_weather
+from src.utils.utils_functions import get_airport_from_postgres_byAirPortCode_cached
 import pandas as pd
 
 # === NEW: imports pour l'argument --date ===

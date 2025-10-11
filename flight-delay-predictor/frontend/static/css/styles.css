@@ -1,0 +1,155 @@
+/* frontend/static/css/styles.css */
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+  border: none;
+  border-radius: 15px;
+}
+
+.card-header {
+  border-radius: 15px 15px 0 0 !important;
+}
+
+.btn-primary {
+  background: linear-gradient(45deg, #007bff, #0056b3);
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(45deg, #0056b3, #004085);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+.form-control, .form-select {
+  border-radius: 10px;
+  border: 2px solid #e9ecef;
+  padding: 12px;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.progress {
+  border-radius: 15px;
+  background-color: #e9ecef;
+}
+
+.progress-bar {
+  border-radius: 15px;
+}
+
+.prediction-gauge {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border-radius: 15px;
+  margin-bottom: 15px;
+}
+
+.list-group-item {
+  border: none;
+  border-radius: 10px;
+  margin-bottom: 5px;
+  background-color: #f8f9fa;
+}
+
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+.shadow {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Enhanced styling for the flight delay predictor */
+.navbar-brand {
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #007bff, #0056b3) !important;
+  color: white !important;
+}
+
+.card-header.bg-info {
+  background: linear-gradient(135deg, #17a2b8, #138496) !important;
+}
+
+/* Chart container styling */
+#factors-chart {
+  max-height: 250px;
+  margin: 10px 0;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .card-body {
+    padding: 20px 15px;
+  }
+  
+  .display-4 {
+    font-size: 2.5rem;
+  }
+  
+  #factors-chart {
+    max-height: 200px;
+  }
+}
+
+/* Animation for results card */
+#results-card {
+  animation: fadeInUp 0.5s ease-in-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading state improvements */
+.btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Toast notifications positioning */
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1055;
+}
+
+/* Success/Error styling for delay estimates */
+.text-success {
+  color: #28a745 !important;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}

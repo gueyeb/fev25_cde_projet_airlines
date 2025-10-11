@@ -1,6 +1,6 @@
 import pandas as pd
-from functions.pg_functions import insert_dataframe
-from functions.utils_functions import fetch_paginated, verify_then_sync
+from src.utils.pg_functions import insert_dataframe
+from src.utils.utils_functions import fetch_paginated, verify_then_sync
 
 def sync_aircrafts():
     raw = fetch_paginated("/mds-references/aircraft", "AircraftResource.AircraftSummaries.AircraftSummary")

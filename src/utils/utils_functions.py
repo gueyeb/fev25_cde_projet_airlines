@@ -3,8 +3,8 @@ from typing import Any, Optional
 from urllib.parse import urlparse, parse_qs
 from typing import Callable, Optional
 
-from functions.weather_functions import *
-from functions.pg_functions import table_count
+from src.utils.weather_functions import *
+from src.utils.pg_functions import table_count
 
 load_env()
 

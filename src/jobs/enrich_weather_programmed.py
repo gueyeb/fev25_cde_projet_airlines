@@ -9,7 +9,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 # Reuse DB/API helpers
-from functions.weather_functions import (
+from src.utils.weather_functions import (
     get_airport_from_postgres_byAirPortCode,
     fetch_hourly_series,
     owm_budget_remaining,   # <-- budget restant journalier (UTC) côté DB

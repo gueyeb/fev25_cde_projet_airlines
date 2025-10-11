@@ -2,9 +2,9 @@ import json
 
 from sqlalchemy import text
 
-from functions.pg_functions import engine
-from functions.pg_functions import getFlightsToUpdateToday, get_route_airports, pd
-from functions.utils_functions import _safe_get, cached_weather, get_airport_from_postgres_byAirPortCode_cached, fetch_paginated, \
+from src.utils.pg_functions import engine
+from src.utils.pg_functions import getFlightsToUpdateToday, get_route_airports, pd
+from src.utils.utils_functions import _safe_get, cached_weather, get_airport_from_postgres_byAirPortCode_cached, fetch_paginated, \
     parse_any, to_bucket_iso
 
 

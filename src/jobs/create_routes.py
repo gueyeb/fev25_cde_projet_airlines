@@ -2,8 +2,8 @@ import pandas as pd
 from geopy.distance import geodesic
 from tqdm import tqdm
 
-from functions.pg_functions import getAirPorts
-from functions.pg_functions import insert_dataframe
+from src.utils.pg_functions import getAirPorts
+from src.utils.pg_functions import insert_dataframe
 
 airports_df = getAirPorts()
 def create_routes(airports_df, batch_size=10000):
