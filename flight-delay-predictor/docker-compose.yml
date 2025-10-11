@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dst-airlines-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PG_HOST=${PG_HOST:-postgres}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_DB=${PG_DB:-dst_airlines}
+      - PG_USER=${PG_USER:-dst_user}
+      - PG_PASSWORD=${PG_PASSWORD:-dst_password}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017}
+      - MONGO_DB=${MONGO_DB:-dst_airlines}
+    volumes:
+      - ./backend:/app
+      - ../src:/app/src
+      - ../config:/app/config
+    depends_on:
+      - postgres
+      - mongo
+    networks:
+      - dst_net
+    command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: dst-airlines-postgres
+    environment:
+      POSTGRES_DB: ${PG_DB:-dst_airlines}
+      POSTGRES_USER: ${PG_USER:-dst_user}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-dst_password}
+    ports:
+      - "5438:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - dst_net
+
+  mongo:
+    image: mongo:7-jammy
+    container_name: dst-airlines-mongo
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - dst_net
+
+networks:
+  dst_net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  mongo_data:
