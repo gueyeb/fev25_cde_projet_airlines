@@ -1,6 +1,7 @@
 import os
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
+from urllib.parse import quote_plus
 
 import pandas as pd
 from sqlalchemy import MetaData, Table
@@ -8,7 +9,6 @@ from sqlalchemy import create_engine
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
-from datetime import date, timedelta
 
 from config.env_loader import load_env
 
@@ -23,9 +23,11 @@ DBNAME = os.getenv("PG_DB")
 USER = os.getenv("PG_USER")
 PASSWORD = os.getenv("PG_PASSWORD")
 
+# URL-encode the password to handle special characters
+PASSWORD_ENCODED = quote_plus(PASSWORD)
 
-# Connexion PostgreSQL
-DB_URL = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+# Connexion PostgreSQL with properly encoded password
+DB_URL = f"postgresql://{USER}:{PASSWORD_ENCODED}@{HOST}:{PORT}/{DBNAME}"
 engine = create_engine(DB_URL)
 
 @contextmanager
@@ -180,6 +182,31 @@ def city_exists(code):
         result = conn.execute(text("SELECT 1 FROM cities WHERE city_code = :code"), {"code": code})
         return result.fetchone() is not None
 
+def build_historical_flights_from_bts():
+    df = pd.read_sql("SELECT * FROM bts_flight_history", engine)
+
+    # Construction des données pour historical_flights
+    flights = []
+
+    """
+        => df.iterrows()	Méthode Pandas qui retourne un générateur de paires (index, row) où :
+                • index est l'index de la ligne
+                • row est un objet Series représentant la ligne
+        => for _, row in ...
+            La variable _ capte l'index, mais on ne s'en sert pas, donc on le nomme _ par convention
+        => row
+            Est une ligne du DataFrame sous forme de dictionnaire Pandas (row["colonne"])
+    """
+    for _, row in df.iterrows():
+        flights.append({
+            "source": "BTS",
+            "delay_minutes": int(row['arr_delay']) if not pd.isna(row['arr_delay']) else None,
+            "is_delayed": bool(row['arr_del15']) if not pd.isna(row['arr_del15']) and row['arr_del15'] > 0 else False,
+            "bts_flight_history_id": row['id']
+        })
+
+    flights_df = pd.DataFrame(flights)
+    insert_dataframe(flights_df, "historical_flights")
 
 def getAirPorts():
     query = """
