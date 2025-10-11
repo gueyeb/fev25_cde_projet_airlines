@@ -1,16 +1,20 @@
-certifi==2025.4.26
-charset-normalizer==3.4.2
-dotenv==0.9.9
-idna==3.10
-numpy==2.3.0
-pandas==2.3.0
-psycopg2==2.9.10
-python-dateutil==2.9.0.post0
-python-dotenv==1.1.0
-pytz==2025.2
-requests==2.32.3
-six==1.17.0
-SQLAlchemy==2.0.41
-typing_extensions==4.14.0
-tzdata==2025.2
-urllib3==2.4.0
+# Core
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Data
+numpy>=1.26.0
+pandas>=2.2.0
+
+# Database
+SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.9
+
+# Geo / distances
+geopy>=2.4.1
+
+# Progress bars
+tqdm>=4.66.0
+
+# Timezone data (needed on Windows; harmless elsewhere)
+tzdata>=2024.1; platform_system == "Windows"
