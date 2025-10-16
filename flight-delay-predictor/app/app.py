@@ -206,8 +206,14 @@ async def predict_delay(flight_data: FlightPredictionRequest):
         )
 
     except ValueError as e:
+        print(f"❌ ValueError in /api/predict: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {str(e)}")
     except Exception as e:
+        print(f"❌ Exception in /api/predict: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
 
@@ -224,8 +230,9 @@ async def health_check():
 def check_db_connection():
     """Check if database connection is working"""
     try:
+        from sqlalchemy import text
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False
