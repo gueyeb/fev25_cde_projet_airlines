@@ -166,6 +166,36 @@ python -m src.jobs.sync_flight_history
 python -m src.jobs.enrich_weather_programmed
 ```
 
+## 🤖 Entraînement du modèle de Machine Learning
+
+Avant de lancer l'application web, vous devez entraîner le modèle de prédiction.
+
+### Prérequis
+
+Assurez-vous d'avoir des données dans la table `lufthansa_flight_history` (via `sync_flight_history`).
+
+### Entraîner le modèle
+
+Deux approches sont disponibles :
+
+**Classification** (retard Oui/Non) :
+```bash
+python -m src.ml.ml_classification
+```
+
+**Régression** (durée du retard en minutes) :
+```bash
+python -m src.ml.ml_regression
+```
+
+Les scripts vont :
+1. Charger les données depuis PostgreSQL
+2. Prétraiter et encoder les features
+3. Entraîner le modèle (RandomForest)
+4. Sauvegarder automatiquement le modèle dans `flight-delay-predictor/app/models/flight_delay_model.pkl`
+
+**Note** : Le modèle actuel dans l'application utilise des prédictions simulées. Une fois le modèle `.pkl` généré, l'application le chargera automatiquement au démarrage.
+
 ## 🌐 Application Web - Flight Delay Predictor
 
 L'application web FastAPI permet de prédire les retards de vols en temps réel.

@@ -1,26 +1,25 @@
 import pandas as pd
-from sqlalchemy import create_engine
+import joblib
+import sys
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
 
+# Add parent directory to path to import project modules
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.utils.pg_functions import engine
+
 # --- 1. Connexion à la base de données et chargement des données ---
 def get_db_engine():
     """
-    Crée et retourne un moteur de connexion à la base de données.
-    Assurez-vous d'avoir les variables d'environnement configurées
-    (par exemple via un fichier .env).
+    Utilise le moteur de connexion configuré dans src.utils.pg_functions
     """
-    # Exemple de chaîne de connexion PostgreSQL
-    db_user = "votre_utilisateur"
-    db_password = "votre_mot_de_passe"
-    db_host = "votre_hôte_db"
-    db_port = "votre_port" # 5438 si c'est le cas
-    db_name = "votre_nom_db"
-    conn_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    return create_engine(conn_string)
+    return engine
 
 def load_data_from_db(engine):
     """
@@ -109,13 +108,20 @@ if __name__ == "__main__":
     try:
         db_engine = get_db_engine()
         df = load_data_from_db(db_engine)
-        
+
         if not df.empty:
+            print(f"📊 Données chargées : {len(df)} enregistrements")
             df_processed = preprocess_data(df)
             trained_model = train_model(df_processed)
-            print("✔️ Modèle de machine learning entraîné avec succès.")
+
+            # Sauvegarder le modèle
+            model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_model.pkl"
+            model_path.parent.mkdir(parents=True, exist_ok=True)
+            joblib.dump(trained_model, model_path)
+            print(f"✔️ Modèle sauvegardé : {model_path}")
+            print("✔️ Modèle de machine learning (régression) entraîné avec succès.")
         else:
             print("⚠️ Le DataFrame est vide. Aucune donnée à traiter.")
-            
+
     except Exception as e:
         print(f"❌ Une erreur est survenue : {e}")
