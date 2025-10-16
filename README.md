@@ -50,7 +50,8 @@ fev25_cde_projet_airlines/
 │   │   └── static/
 │   │       ├── css/styles.css
 │   │       └── js/script.js
-│   └── notebooks/                    # Jupyter notebooks (analyse, ML)
+│   ├── docker-compose.yml            # Configuration Docker pour l'application
+│   └── .env.example                  # Template de configuration
 │
 ├── docs/                             # Documentation et rapports
 │   ├── BTS_USA/                      # Données historiques BTS
