@@ -180,13 +180,27 @@ python app.py
 
 ### Endpoints API
 
+**Interface utilisateur**
 - `GET /` - Interface utilisateur web
+
+**Prédiction de retards**
 - `GET /api/airports` - Liste des aéroports disponibles
 - `POST /api/predict` - Prédire un retard de vol
+
+**Consultation des données de référence** (avec pagination)
+- `GET /api/data/countries?limit=100&offset=0` - Liste des pays
+- `GET /api/data/cities?limit=100&offset=0` - Liste des villes
+- `GET /api/data/airlines?limit=100&offset=0` - Liste des compagnies aériennes
+- `GET /api/data/airports?limit=100&offset=0` - Liste détaillée des aéroports
+- `GET /api/data/aircrafts?limit=100&offset=0` - Liste des types d'avions
+- `GET /api/data/routes?limit=100&offset=0` - Liste des routes de vol
+
+**Système**
 - `GET /api/health` - Vérification de l'état du système
 
-### Exemple de requête
+### Exemples de requêtes
 
+**Prédire un retard de vol :**
 ```bash
 curl -X POST "http://localhost:8000/api/predict" \
   -H "Content-Type: application/json" \
@@ -197,6 +211,16 @@ curl -X POST "http://localhost:8000/api/predict" \
     "arrival_airport": "JFK",
     "scheduled_departure": "2025-10-20T10:30:00"
   }'
+```
+
+**Consulter les pays :**
+```bash
+curl "http://localhost:8000/api/data/countries?limit=10&offset=0"
+```
+
+**Consulter les compagnies aériennes :**
+```bash
+curl "http://localhost:8000/api/data/airlines"
 ```
 
 ## 🧠 Architecture technique

@@ -231,6 +231,177 @@ def check_db_connection():
         return False
 
 
+# Data viewing endpoints
+@app.get("/api/data/countries")
+async def get_countries(limit: int = 100, offset: int = 0):
+    """Get list of countries from database"""
+    try:
+        query = f"""
+            SELECT country_code, country_name
+            FROM countries
+            ORDER BY country_name
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        # Get total count
+        count_query = "SELECT COUNT(*) as total FROM countries"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching countries: {str(e)}")
+
+
+@app.get("/api/data/cities")
+async def get_cities(limit: int = 100, offset: int = 0):
+    """Get list of cities from database"""
+    try:
+        query = f"""
+            SELECT c.city_code, c.city_name, c.country_code, co.country_name
+            FROM cities c
+            LEFT JOIN countries co ON c.country_code = co.country_code
+            ORDER BY c.city_name
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        count_query = "SELECT COUNT(*) as total FROM cities"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching cities: {str(e)}")
+
+
+@app.get("/api/data/airlines")
+async def get_airlines(limit: int = 100, offset: int = 0):
+    """Get list of airlines from database"""
+    try:
+        query = f"""
+            SELECT airline_id, airline_code, airline_name
+            FROM airlines
+            ORDER BY airline_name
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        count_query = "SELECT COUNT(*) as total FROM airlines"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching airlines: {str(e)}")
+
+
+@app.get("/api/data/airports")
+async def get_airports_data(limit: int = 100, offset: int = 0):
+    """Get list of airports with full details from database"""
+    try:
+        query = f"""
+            SELECT
+                airport_code,
+                iata_code,
+                name,
+                city_code,
+                country_code,
+                location_type,
+                latitude,
+                longitude,
+                time_zone_id
+            FROM airports
+            ORDER BY name
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        count_query = "SELECT COUNT(*) as total FROM airports"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching airports: {str(e)}")
+
+
+@app.get("/api/data/aircrafts")
+async def get_aircrafts(limit: int = 100, offset: int = 0):
+    """Get list of aircraft types from database"""
+    try:
+        query = f"""
+            SELECT aircraft_code, aircraft_name, airline_equipment_code
+            FROM aircrafts
+            ORDER BY aircraft_name
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        count_query = "SELECT COUNT(*) as total FROM aircrafts"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching aircrafts: {str(e)}")
+
+
+@app.get("/api/data/routes")
+async def get_routes(limit: int = 100, offset: int = 0):
+    """Get list of flight routes from database"""
+    try:
+        query = f"""
+            SELECT
+                r.route_id,
+                r.origin_airport_code,
+                ao.name as origin_airport_name,
+                r.destination_airport_code,
+                ad.name as destination_airport_name,
+                r.distance_km,
+                r.created_at
+            FROM routes r
+            LEFT JOIN airports ao ON r.origin_airport_code = ao.airport_code
+            LEFT JOIN airports ad ON r.destination_airport_code = ad.airport_code
+            ORDER BY r.route_id
+            LIMIT {limit} OFFSET {offset}
+        """
+        df = pd.read_sql(query, engine)
+
+        count_query = "SELECT COUNT(*) as total FROM routes"
+        total = pd.read_sql(count_query, engine)["total"][0]
+
+        return {
+            "data": df.to_dict(orient="records"),
+            "total": int(total),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching routes: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
 
