@@ -36,8 +36,8 @@ app.add_middleware(
 )
 
 # Mount static files
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
+APP_DIR = Path(__file__).parent
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
 # Pydantic models for request/response
@@ -84,7 +84,7 @@ model = load_model()
 @app.get("/")
 async def root():
     """Serve the main frontend page"""
-    return FileResponse(str(FRONTEND_DIR / "templates" / "index.html"))
+    return FileResponse(str(APP_DIR / "templates" / "index.html"))
 
 
 @app.get("/api/airports", response_model=list[AirportInfo])

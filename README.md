@@ -40,12 +40,11 @@ fev25_cde_projet_airlines/
 │       └── utils_functions.py        # Fonctions génériques
 │
 ├── flight-delay-predictor/          # Application web de prédiction
-│   ├── backend/
-│   │   ├── app.py                    # API FastAPI
-│   │   ├── requirements.txt          # Dépendances backend
+│   ├── app/                          # Application FastAPI
+│   │   ├── app.py                    # Point d'entrée FastAPI
+│   │   ├── requirements.txt          # Dépendances de l'application
 │   │   ├── models/                   # Modèles ML (PKL)
-│   │   └── utils/                    # Utilitaires backend
-│   ├── frontend/
+│   │   ├── utils/                    # Utilitaires backend
 │   │   ├── templates/
 │   │   │   └── index.html            # Interface utilisateur
 │   │   └── static/
@@ -86,8 +85,8 @@ cd fev25_cde_projet_airlines
 # Dépendances globales (data pipeline)
 pip install -r requirements.txt
 
-# Dépendances backend (application web)
-pip install -r flight-delay-predictor/backend/requirements.txt
+# Dépendances de l'application web
+pip install -r flight-delay-predictor/app/requirements.txt
 ```
 
 ### 3. Configuration des bases de données
@@ -173,7 +172,7 @@ L'application web FastAPI permet de prédire les retards de vols en temps réel.
 ### Lancement du serveur
 
 ```bash
-cd flight-delay-predictor/backend
+cd flight-delay-predictor/app
 python app.py
 
 # Le serveur démarre sur http://localhost:8000
