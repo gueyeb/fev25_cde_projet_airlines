@@ -138,6 +138,12 @@ run_py() {
   "${PY_BIN}" "${script}" "$@"
 }
 
+run_py_module() {
+  local module="$1"; shift || true
+  echo "▶️  ${PY_BIN} -m ${module} $*"
+  "${PY_BIN}" -m "${module}" "$@"
+}
+
 pause_between() {
   local secs="$1"
   echo "⏳ Pause ${secs}s ..."
@@ -145,26 +151,31 @@ pause_between() {
 }
 
 ### --- Chemins scripts Python --------------------------------------------------
-MIGRATIONS_DIR="${PROJECT_DIR}/migrations"
-SCRIPTS_DIR="${PROJECT_DIR}/jobs"
+DB_MIGRATIONS_DIR="${PROJECT_DIR}/database/migrations"
+JOBS_DIR="${PROJECT_DIR}/src/jobs"
 
-PREPARE_DB="${MIGRATIONS_DIR}/prepare_db.py"
+# Migration SQL (pas de prepare_db.py, on utilise le fichier SQL directement)
+DB_SCHEMA="${DB_MIGRATIONS_DIR}/1_create_tables.sql"
 
-SYNC_AIRCRAFTS="${SCRIPTS_DIR}/sync_aircrafts.py"
-SYNC_AIRLINES="${SCRIPTS_DIR}/sync_airlines.py"
-SYNC_AIRPORTS="${SCRIPTS_DIR}/sync_airports.py"
-SYNC_COUNTRIES="${SCRIPTS_DIR}/sync_countries.py"
+# Jobs de synchronisation (modules Python à exécuter avec -m)
+SYNC_COUNTRIES="src.jobs.sync_countries"
+SYNC_CITIES="src.jobs.sync_cities"
+SYNC_AIRLINES="src.jobs.sync_airlines"
+SYNC_AIRPORTS="src.jobs.sync_airports"
+SYNC_AIRCRAFTS="src.jobs.sync_aircrafts"
+CREATE_ROUTES="src.jobs.create_routes"
+SYNC_LH_HISTORY="src.jobs.sync_flight_history"
+ENRICH_WEATHER="src.jobs.enrich_weather_programmed"
 
-SYNC_LH_HISTORY="${SCRIPTS_DIR}/sync_flight_history.py"
-ENRICH_WEATHER="${SCRIPTS_DIR}/enrich_weather_programmed.py"
-
-[[ -f "$PREPARE_DB" ]]      || die "Script manquant: $PREPARE_DB"
-[[ -f "$SYNC_AIRCRAFTS" ]]  || die "Script manquant: $SYNC_AIRCRAFTS"
-[[ -f "$SYNC_AIRLINES" ]]   || die "Script manquant: $SYNC_AIRLINES"
-[[ -f "$SYNC_AIRPORTS" ]]   || die "Script manquant: $SYNC_AIRPORTS"
-[[ -f "$SYNC_COUNTRIES" ]]  || die "Script manquant: $SYNC_COUNTRIES"
-[[ -f "$SYNC_LH_HISTORY" ]] || die "Script manquant: $SYNC_LH_HISTORY"
-[[ -f "$ENRICH_WEATHER" ]]  || die "Script manquant: $ENRICH_WEATHER"
+# Vérification de l'existence des fichiers Python
+[[ -f "${JOBS_DIR}/sync_countries.py" ]]               || die "Script manquant: ${JOBS_DIR}/sync_countries.py"
+[[ -f "${JOBS_DIR}/sync_cities.py" ]]                  || die "Script manquant: ${JOBS_DIR}/sync_cities.py"
+[[ -f "${JOBS_DIR}/sync_airlines.py" ]]                || die "Script manquant: ${JOBS_DIR}/sync_airlines.py"
+[[ -f "${JOBS_DIR}/sync_airports.py" ]]                || die "Script manquant: ${JOBS_DIR}/sync_airports.py"
+[[ -f "${JOBS_DIR}/sync_aircrafts.py" ]]               || die "Script manquant: ${JOBS_DIR}/sync_aircrafts.py"
+[[ -f "${JOBS_DIR}/create_routes.py" ]]                || die "Script manquant: ${JOBS_DIR}/create_routes.py"
+[[ -f "${JOBS_DIR}/sync_flight_history.py" ]]          || die "Script manquant: ${JOBS_DIR}/sync_flight_history.py"
+[[ -f "${JOBS_DIR}/enrich_weather_programmed.py" ]]    || die "Script manquant: ${JOBS_DIR}/enrich_weather_programmed.py"
 
 ### --- 1) Vérifier Docker -----------------------------------------------------
 need_docker
@@ -184,37 +195,69 @@ case "$ENV_MODE" in
 esac
 
 ### --- 3) Préparation DB (migrations/DDL) -------------------------------------
-echo "🧱 Préparation de la base (création des tables)..."
-if [[ -n "$DOTENV_PATH" ]]; then
-  run_py "$PREPARE_DB" --env "$DOTENV_PATH" --tables aircrafts,airlines,airports,countries,lufthansa_flight_history,weather_hourly_cache
-else
-  run_py "$PREPARE_DB"
+echo "🧱 Préparation de la base (création des tables via SQL)..."
+echo "ℹ️  Schéma SQL: ${DB_SCHEMA}"
+echo "⚠️  IMPORTANT: Assurez-vous d'avoir exécuté le schéma SQL manuellement :"
+echo "   psql -h \$PG_HOST -p \$PG_PORT -U \$PG_USER -d \$PG_DB -f ${DB_SCHEMA}"
+echo "   ou via un client PostgreSQL (DBeaver, pgAdmin, etc.)"
+echo ""
+read -p "Les tables sont-elles créées ? (y/n) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    die "Veuillez créer les tables avant de continuer."
 fi
-pause_between "$SLEEP_BETWEEN"
+pause_between 2
 
 ### --- 4) Chargement des données de référence ---------------------------------
 echo "📦 Chargement des tables de référence (ordre imposé) ..."
-run_py "$SYNC_AIRCRAFTS"
+
+echo "🌍 1/6 - Synchronisation des pays..."
+run_py_module "$SYNC_COUNTRIES"
 pause_between "$SLEEP_BETWEEN"
 
-run_py "$SYNC_AIRLINES"
+echo "🏙️  2/6 - Synchronisation des villes..."
+run_py_module "$SYNC_CITIES"
 pause_between "$SLEEP_BETWEEN"
 
-run_py "$SYNC_AIRPORTS"
+echo "✈️  3/6 - Synchronisation des compagnies aériennes..."
+run_py_module "$SYNC_AIRLINES"
 pause_between "$SLEEP_BETWEEN"
 
-run_py "$SYNC_COUNTRIES"
+echo "🛬 4/6 - Synchronisation des aéroports..."
+run_py_module "$SYNC_AIRPORTS"
+pause_between "$SLEEP_BETWEEN"
+
+echo "🛩️  5/6 - Synchronisation des types d'avions..."
+run_py_module "$SYNC_AIRCRAFTS"
+pause_between "$SLEEP_BETWEEN"
+
+echo "🗺️  6/6 - Création des routes avec calcul de distances..."
+run_py_module "$CREATE_ROUTES"
 pause_between "$SLEEP_BETWEEN"
 
 ### --- 5) Schedules LH + Météo programmée -------------------------------------
-echo "🛫 Synchronisation des Schedules Lufthansa (${TARGET_DATE}) ..."
-# Si ton script accepte --date, décommente la ligne suivante et commente l’autre.
-run_py "$SYNC_LH_HISTORY" --date "$TARGET_DATE"
-# run_py "$SYNC_LH_HISTORY"
+echo "🛫 Synchronisation de l'historique des vols (${TARGET_DATE}) ..."
+run_py_module "$SYNC_LH_HISTORY"
 pause_between "$SLEEP_BETWEEN"
 
 echo "🌦️  Enrichissement météo (programmée) pour ${TARGET_DATE} ..."
-run_py "$ENRICH_WEATHER" --date "$TARGET_DATE" --budget "$BUDGET_HOURLY"
+# Note: Vérifier si le script accepte les arguments --date et --budget
+if [[ -n "$TARGET_DATE" ]] && [[ "$TARGET_DATE" != "$(date +%F)" ]]; then
+    run_py_module "$ENRICH_WEATHER" --date "$TARGET_DATE" --budget "$BUDGET_HOURLY"
+else
+    run_py_module "$ENRICH_WEATHER"
+fi
 pause_between "$SLEEP_BETWEEN"
 
+echo ""
 echo "✅ Pipeline terminé avec succès."
+echo ""
+echo "📋 Récapitulatif :"
+echo "  - Tables de référence synchronisées (countries, cities, airlines, airports, aircrafts)"
+echo "  - Routes créées avec calcul de distances"
+echo "  - Historique des vols synchronisé"
+echo "  - Données météo enrichies"
+echo ""
+echo "🚀 Prochaines étapes :"
+echo "  1. Entraîner le modèle ML : python -m src.ml.ml_classification"
+echo "  2. Lancer l'application web : cd flight-delay-predictor/app && python app.py"
