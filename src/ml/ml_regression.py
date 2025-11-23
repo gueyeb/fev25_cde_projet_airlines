@@ -110,7 +110,7 @@ if __name__ == "__main__":
         df = load_data_from_db(db_engine)
 
         if not df.empty:
-            print(f"📊 Données chargées : {len(df)} enregistrements")
+            print(f"[INFO] Données chargées : {len(df)} enregistrements")
             df_processed = preprocess_data(df)
             trained_model = train_model(df_processed)
 
@@ -118,10 +118,10 @@ if __name__ == "__main__":
             model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_model.pkl"
             model_path.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump(trained_model, model_path)
-            print(f"✔️ Modèle sauvegardé : {model_path}")
-            print("✔️ Modèle de machine learning (régression) entraîné avec succès.")
+            print("[SUCCESS] Modèle sauvegardé : {model_path}")
+            print("[SUCCESS] Modèle de machine learning (régression) entraîné avec succès.")
         else:
-            print("⚠️ Le DataFrame est vide. Aucune donnée à traiter.")
+            print("[WARNING] Le DataFrame est vide. Aucune donnée à traiter.")
 
     except Exception as e:
-        print(f"❌ Une erreur est survenue : {e}")
+        print(f"[ERROR] Une erreur est survenue : {e}")

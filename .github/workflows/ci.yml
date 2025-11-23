@@ -1,0 +1,147 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, claude/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install flake8 pytest pytest-cov
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv,env,.git,__pycache__
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=venv,env,.git,__pycache__
+
+    - name: Set up test environment variables
+      run: |
+        echo "PG_HOST=localhost" >> $GITHUB_ENV
+        echo "PG_PORT=5432" >> $GITHUB_ENV
+        echo "PG_DB=test_db" >> $GITHUB_ENV
+        echo "PG_USER=postgres" >> $GITHUB_ENV
+        echo "PG_PASSWORD=postgres" >> $GITHUB_ENV
+
+    - name: Run tests
+      run: |
+        # Add your test command here when tests are available
+        # pytest tests/ -v --cov=src --cov-report=xml
+        echo "[INFO] No tests defined yet. Skipping test execution."
+
+    - name: Check for security vulnerabilities
+      run: |
+        pip install safety
+        # Check for known security vulnerabilities in dependencies
+        safety check --json || true
+
+  build-validation:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Validate project structure
+      run: |
+        echo "[INFO] Validating project structure..."
+
+        # Check critical directories exist
+        test -d src || { echo "[ERROR] src directory missing"; exit 1; }
+        test -d database || { echo "[ERROR] database directory missing"; exit 1; }
+        test -d config || { echo "[ERROR] config directory missing"; exit 1; }
+
+        # Check critical files exist
+        test -f requirements.txt || { echo "[ERROR] requirements.txt missing"; exit 1; }
+        test -f run_project.sh || { echo "[ERROR] run_project.sh missing"; exit 1; }
+
+        echo "[SUCCESS] Project structure validation passed"
+
+    - name: Check for secrets in code
+      run: |
+        echo "[INFO] Checking for potential secrets in code..."
+
+        # Check for common secret patterns (excluding test files and example files)
+        if grep -r -E "(api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"]{8,}" --exclude-dir={.git,venv,env,__pycache__} --exclude="*.example" --exclude="*.md" .; then
+          echo "[WARNING] Potential secrets found in code. Please review."
+          exit 1
+        fi
+
+        echo "[SUCCESS] No obvious secrets found in code"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Check if Dockerfile exists
+      id: check_dockerfile
+      run: |
+        if [ -f Dockerfile ]; then
+          echo "dockerfile_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "dockerfile_exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Set up Docker Buildx
+      if: steps.check_dockerfile.outputs.dockerfile_exists == 'true'
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      if: steps.check_dockerfile.outputs.dockerfile_exists == 'true'
+      run: |
+        docker build -t airline-delay-predictor:${{ github.sha }} .
+        echo "[SUCCESS] Docker image built successfully"
+
+    - name: Skip Docker build
+      if: steps.check_dockerfile.outputs.dockerfile_exists == 'false'
+      run: |
+        echo "[INFO] No Dockerfile found. Skipping Docker build."

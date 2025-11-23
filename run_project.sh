@@ -57,7 +57,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$ENV_MODE" ]]; then
-  echo "❌ Paramètre manquant: --env=host|prod"
+  echo "[ERROR] Paramètre manquant: --env=host|prod"
   exit 1
 fi
 
@@ -68,18 +68,18 @@ export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
 if [[ -z "$PY_BIN" ]]; then
   if command -v python3 >/dev/null 2>&1; then PY_BIN="python3"
   elif command -v python  >/dev/null 2>&1; then PY_BIN="python"
-  else echo "❌ Python introuvable. Spécifie --python=/chemin/vers/python"; exit 1
+  else echo "[ERROR] Python introuvable. Spécifie --python=/chemin/vers/python"; exit 1
   fi
 fi
 
 ### --- Fonctions utilitaires ---------------------------------------------------
-die() { echo "❌ $*" >&2; exit 1; }
+die() { echo "[ERROR] $*" >&2; exit 1; }
 
 need_docker() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "⚠️  Docker n'est pas installé."
+    echo "[WARNING] Docker n'est pas installé."
     echo "Veuillez installer Docker puis relancer ce script."
-    echo "👉 https://docs.docker.com/engine/install/"
+    echo "=> https://docs.docker.com/engine/install/"
     exit 1
   fi
 }
@@ -114,39 +114,39 @@ docker_compose_up() {
   if container_exists; then
     if container_is_running; then
       if [[ "$FORCE_RECREATE" == "true" ]]; then
-        echo "♻️  --force-recreate demandé : down puis up..."
+        echo "[INFO] --force-recreate demandé : down puis up..."
         (cd "$PROJECT_DIR" && $dccmd down)
         (cd "$PROJECT_DIR" && $dccmd up -d)
       else
-        echo "✅ Conteneur '$DB_CONTAINER_NAME' déjà en cours d'exécution. On continue sans relancer docker-compose."
+        echo "[SUCCESS] Conteneur '$DB_CONTAINER_NAME' déjà en cours d'exécution. On continue sans relancer docker-compose."
       fi
     else
-      echo "🧹 Conteneur '$DB_CONTAINER_NAME' existe mais est arrêté → suppression..."
+      echo "[INFO] Conteneur '$DB_CONTAINER_NAME' existe mais est arrêté → suppression..."
       docker rm -f "$DB_CONTAINER_NAME" >/dev/null
-      echo "🚀 Lancement docker-compose..."
+      echo "[INFO] Lancement docker-compose..."
       (cd "$PROJECT_DIR" && $dccmd up -d)
     fi
   else
-    echo "🚀 Lancement docker-compose (premier démarrage)..."
+    echo "[INFO] Lancement docker-compose (premier démarrage)..."
     (cd "$PROJECT_DIR" && $dccmd up -d)
   fi
 }
 
 run_py() {
   local script="$1"; shift || true
-  echo "▶️  ${PY_BIN} ${script} $*"
+  echo "[RUN] ${PY_BIN} ${script} $*"
   "${PY_BIN}" "${script}" "$@"
 }
 
 run_py_module() {
   local module="$1"; shift || true
-  echo "▶️  ${PY_BIN} -m ${module} $*"
+  echo "[RUN] ${PY_BIN} -m ${module} $*"
   "${PY_BIN}" -m "${module}" "$@"
 }
 
 pause_between() {
   local secs="$1"
-  echo "⏳ Pause ${secs}s ..."
+  echo "[WAIT] Pause ${secs}s ..."
   sleep "${secs}"
 }
 
@@ -183,11 +183,11 @@ need_docker
 ### --- 2) Mode env ------------------------------------------------------------
 case "$ENV_MODE" in
   host)
-    echo "🌐 Mode --env=host : gestion du stack docker-compose ..."
+    echo "[INFO] Mode --env=host : gestion du stack docker-compose ..."
     docker_compose_up
     ;;
   prod)
-    echo "🏭 Mode --env=prod : pas de docker-compose (on suppose une base accessible)."
+    echo "[INFO] Mode --env=prod : pas de docker-compose (on suppose une base accessible)."
     ;;
   *)
     die "--env doit être 'host' ou 'prod'"
@@ -195,9 +195,9 @@ case "$ENV_MODE" in
 esac
 
 ### --- 3) Préparation DB (migrations/DDL) -------------------------------------
-echo "🧱 Préparation de la base (création des tables via SQL)..."
-echo "ℹ️  Schéma SQL: ${DB_SCHEMA}"
-echo "⚠️  IMPORTANT: Assurez-vous d'avoir exécuté le schéma SQL manuellement :"
+echo "[INFO] Préparation de la base (création des tables via SQL)..."
+echo "[INFO] Schéma SQL: ${DB_SCHEMA}"
+echo "[WARNING] IMPORTANT: Assurez-vous d'avoir exécuté le schéma SQL manuellement :"
 echo "   psql -h \$PG_HOST -p \$PG_PORT -U \$PG_USER -d \$PG_DB -f ${DB_SCHEMA}"
 echo "   ou via un client PostgreSQL (DBeaver, pgAdmin, etc.)"
 echo ""
@@ -209,38 +209,38 @@ fi
 pause_between 2
 
 ### --- 4) Chargement des données de référence ---------------------------------
-echo "📦 Chargement des tables de référence (ordre imposé) ..."
+echo "[INFO] Chargement des tables de référence (ordre imposé) ..."
 
-echo "🌍 1/6 - Synchronisation des pays..."
+echo "[STEP 1/6] Synchronisation des pays..."
 run_py_module "$SYNC_COUNTRIES"
 pause_between "$SLEEP_BETWEEN"
 
-echo "🏙️  2/6 - Synchronisation des villes..."
+echo "[STEP 2/6] Synchronisation des villes..."
 run_py_module "$SYNC_CITIES"
 pause_between "$SLEEP_BETWEEN"
 
-echo "✈️  3/6 - Synchronisation des compagnies aériennes..."
+echo "[STEP 3/6] Synchronisation des compagnies aériennes..."
 run_py_module "$SYNC_AIRLINES"
 pause_between "$SLEEP_BETWEEN"
 
-echo "🛬 4/6 - Synchronisation des aéroports..."
+echo "[STEP 4/6] Synchronisation des aéroports..."
 run_py_module "$SYNC_AIRPORTS"
 pause_between "$SLEEP_BETWEEN"
 
-echo "🛩️  5/6 - Synchronisation des types d'avions..."
+echo "[STEP 5/6] Synchronisation des types d'avions..."
 run_py_module "$SYNC_AIRCRAFTS"
 pause_between "$SLEEP_BETWEEN"
 
-echo "🗺️  6/6 - Création des routes avec calcul de distances..."
+echo "[STEP 6/6] Création des routes avec calcul de distances..."
 run_py_module "$CREATE_ROUTES"
 pause_between "$SLEEP_BETWEEN"
 
 ### --- 5) Schedules LH + Météo programmée -------------------------------------
-echo "🛫 Synchronisation de l'historique des vols (${TARGET_DATE}) ..."
+echo "[INFO] Synchronisation de l'historique des vols (${TARGET_DATE}) ..."
 run_py_module "$SYNC_LH_HISTORY"
 pause_between "$SLEEP_BETWEEN"
 
-echo "🌦️  Enrichissement météo (programmée) pour ${TARGET_DATE} ..."
+echo "[INFO] Enrichissement météo (programmée) pour ${TARGET_DATE} ..."
 # Note: Vérifier si le script accepte les arguments --date et --budget
 if [[ -n "$TARGET_DATE" ]] && [[ "$TARGET_DATE" != "$(date +%F)" ]]; then
     run_py_module "$ENRICH_WEATHER" --date "$TARGET_DATE" --budget "$BUDGET_HOURLY"
@@ -250,14 +250,14 @@ fi
 pause_between "$SLEEP_BETWEEN"
 
 echo ""
-echo "✅ Pipeline terminé avec succès."
+echo "[SUCCESS] Pipeline terminé avec succès."
 echo ""
-echo "📋 Récapitulatif :"
+echo "[SUMMARY] Récapitulatif :"
 echo "  - Tables de référence synchronisées (countries, cities, airlines, airports, aircrafts)"
 echo "  - Routes créées avec calcul de distances"
 echo "  - Historique des vols synchronisé"
 echo "  - Données météo enrichies"
 echo ""
-echo "🚀 Prochaines étapes :"
+echo "[NEXT] Prochaines étapes :"
 echo "  1. Entraîner le modèle ML : python -m src.ml.ml_classification"
 echo "  2. Lancer l'application web : cd flight-delay-predictor/app && python app.py"
