@@ -15,9 +15,56 @@ services:
       - pg_data:/var/lib/postgresql/data
     networks:
       - dst_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dst_user -d dst_airlines"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:6
+    container_name: mongodb_dst
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dst_user
+      MONGO_INITDB_ROOT_PASSWORD: dst_password
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - dst_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prefect-server:
+    image: prefecthq/prefect:3-python3.11
+    container_name: prefect_server_dst
+    restart: always
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://dst_user:dst_password@postgres:5432/prefect
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_URL: http://prefect-server:4200/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dst_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pg_data:
+  mongo_data:
 
 networks:
   dst_net:
