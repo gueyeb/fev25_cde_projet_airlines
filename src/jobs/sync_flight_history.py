@@ -31,7 +31,7 @@ def _resolve_run_date(cli_date_str: str | None) -> str:
         try:
             d = _dt.date.fromisoformat(cli_date_str)
         except ValueError:
-            raise SystemExit(f"❌ --date doit être au format YYYY-MM-DD (reçu: {cli_date_str})")
+            raise SystemExit(f"[ERROR] --date doit être au format YYYY-MM-DD (reçu: {cli_date_str})")
         return d.isoformat()
     # logique actuelle inchangée
     return date.today().isoformat()
@@ -148,7 +148,7 @@ def sync_lufthansa_flight_history(run_date: str | None = None):
                             all_rows.append(row)
 
             except Exception as e:
-                print(f"❌ Erreur API pour {test_dep}->{test_arr} : {e}")
+                print(f"[ERROR] Erreur API pour {test_dep}->{test_arr} : {e}")
 
     # Insert en bloc
     if all_rows:
@@ -165,9 +165,9 @@ def sync_lufthansa_flight_history(run_date: str | None = None):
             inplace=True,
         )
         insert_dataframe(df, "lufthansa_flight_history")
-        print(f"✅ Insert lufthansa_flight_history : {len(df)} ligne(s)")
+        print(f"[SUCCESS] Insert lufthansa_flight_history : {len(df)} ligne(s)")
     else:
-        print("📭 Aucun segment à insérer pour aujourd'hui.")
+        print("[INFO] Aucun segment à insérer pour aujourd'hui.")
 
 
 if __name__ == "__main__":

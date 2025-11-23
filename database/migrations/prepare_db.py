@@ -111,10 +111,10 @@ def run_sql_file(conn: PGConnection, path: str) -> None:
         with conn.cursor() as cur:
             cur.execute(sql)
         conn.commit()
-        print(f"✅ Applied: {os.path.basename(path)}")
+        print(f"[SUCCESS] Applied: {os.path.basename(path)}")
     except Exception as e:
         conn.rollback()
-        print(f"❌ ERROR in {os.path.basename(path)}: {e}")
+        print(f"[ERROR] ERROR in {os.path.basename(path)}: {e}")
         raise
 
 
@@ -125,9 +125,9 @@ def run_all_migrations(conn: PGConnection, sql_dir: str) -> None:
     """
     files = sorted(glob.glob(os.path.join(sql_dir, "*.sql")))
     if not files:
-        print(f"ℹ️  Aucun fichier .sql trouvé dans {sql_dir} — rien à appliquer.")
+        print(f"[INFO] Aucun fichier .sql trouvé dans {sql_dir} — rien à appliquer.")
         return
-    print(f"📚 {len(files)} fichier(s) .sql à appliquer depuis {sql_dir} ...")
+    print(f"[INFO] {len(files)} fichier(s) .sql à appliquer depuis {sql_dir} ...")
     for fp in files:
         run_sql_file(conn, fp)
 
@@ -166,32 +166,32 @@ def main() -> None:
 
     # 1) Charger .env si fourni
     if args.env_file:
-        print(f"🔧 Chargement .env: {args.env_file}")
+        print(f"[CONFIG] Chargement .env: {args.env_file}")
         load_dotenv(args.env_file)
 
     # 2) Connexion
-    print("🔌 Connexion à PostgreSQL ...")
+    print("[INFO] Connexion à PostgreSQL ...")
     conn = get_pg_conn_from_env()
 
     # 3) Vérifier tables vides / non vides
     tables = [t.strip() for t in args.tables.split(",") if t.strip()]
-    print(f"🔎 Contrôle des tables: {', '.join(tables)}")
+    print(f"[INFO] Contrôle des tables: {', '.join(tables)}")
     non_empty = any_table_non_empty(conn, tables)
 
     if non_empty:
-        print("🛑 Arrêt : les tables suivantes contiennent déjà des données :")
+        print("[STOP] Arrêt : les tables suivantes contiennent déjà des données :")
         for t in non_empty:
             print(f"   - {t}")
-        print("ℹ️  Aucune migration n'a été exécutée.")
+        print("[INFO] Aucune migration n'a été exécutée.")
         conn.close()
         sys.exit(0)
 
-    print("✅ OK : toutes les tables sont absentes ou vides → exécution des migrations DDL.")
+    print("[SUCCESS] OK : toutes les tables sont absentes ou vides → exécution des migrations DDL.")
     # 4) Exécuter les migrations SQL
     run_all_migrations(conn, args.sql_dir)
 
     conn.close()
-    print("🎉 Préparation terminée.")
+    print("[SUCCESS] Préparation terminée.")
 
 
 if __name__ == "__main__":

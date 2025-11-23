@@ -22,7 +22,7 @@ def update_lufthansa_flight_history():
     """
     df = getFlightsToUpdateToday()
     if df.empty:
-        print("ℹ️ Aucun vol du jour à rafraîchir (déjà à jour ou aucun vol).")
+        print("[INFO] Aucun vol du jour à rafraîchir (déjà à jour ou aucun vol).")
         return
 
     for _, row in df.iterrows():
@@ -39,7 +39,7 @@ def update_lufthansa_flight_history():
             # Date pour l’endpoint flightstatus
             if pd.isna(dep_sched_d):
                 if pd.isna(arr_sched_d):
-                    print(f"⏭️ Skip vol id={flight_id} (pas de date planifiée)")
+                    print(f"[SKIP] Skip vol id={flight_id} (pas de date planifiée)")
                     continue
                 date_str = arr_sched_d.strftime("%Y-%m-%d")
             else:
@@ -48,7 +48,7 @@ def update_lufthansa_flight_history():
             endpoint = f"/operations/flightstatus/{airline}{flight_no}/{date_str}"
             data = fetch_paginated(endpoint, "FlightStatusResource.Flights.Flight")
             if not data:
-                print(f"⚠️ Pas de flightstatus pour {airline}{flight_no} {date_str}")
+                print(f"[WARNING] Pas de flightstatus pour {airline}{flight_no} {date_str}")
                 continue
 
             flights = data if isinstance(data, list) else [data]
@@ -130,9 +130,9 @@ def update_lufthansa_flight_history():
             with engine.begin() as connection:
                 res = connection.execute(update_stmt, params)
                 if res.rowcount == 0:
-                    print(f"ℹ️ Vol {airline}{flight_no} déjà rafraîchi ou non éligible.")
+                    print(f"[INFO] Vol {airline}{flight_no} déjà rafraîchi ou non éligible.")
                 else:
-                    print(f"✔️ Vol {airline}{flight_no} mis à jour (réels + météo) et flaggé.")
+                    print(f"[SUCCESS] Vol {airline}{flight_no} mis à jour (réels + météo) et flaggé.")
 
         except Exception as e:
-            print(f"❌ Erreur enrichissement {row.get('marketing_carrier_airline_id')}{row.get('marketing_carrier_flight_number')} : {e}")
+            print(f"[ERROR] Erreur enrichissement {row.get('marketing_carrier_airline_id')}{row.get('marketing_carrier_flight_number')} : {e}")

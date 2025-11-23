@@ -47,29 +47,29 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
     next_url = f"{BASE_URL}{endpoint}?limit={limit}&offset={current_offset}"
 
     while next_url:
-        print(f"🔄 Requête : {next_url}")
+        print(f"[REQUEST] Requête : {next_url}")
         retries = 0
         while retries <= max_retries:
             resp = requests.get(next_url, headers=headers)
             if resp.status_code == 429:
-                print(f"⏳ Trop de requêtes (429), attente {retry_wait}s...")
+                print(f"[WAIT] Trop de requêtes (429), attente {retry_wait}s...")
                 time.sleep(retry_wait)
                 retries += 1
             else:
                 break
 
         if resp.status_code == 404:
-            print(f"⚠️ Page ignorée (404 Not Found) : {next_url}")
+            print(f"[WARNING] Page ignorée (404 Not Found) : {next_url}")
             current_offset = extract_offset_from_url(next_url) + limit
             next_url = f"{BASE_URL}{endpoint}?limit={limit}&offset={current_offset}"
             MAX_CONSECUTIVE_404_ERROR_RETRY -= 1
             if MAX_CONSECUTIVE_404_ERROR_RETRY == 0:
-                print("🛑 Trop de 404 consécutifs, arrêt de la pagination.")
+                print("[STOP] Trop de 404 consécutifs, arrêt de la pagination.")
                 break
             else:
                 continue
         elif resp.status_code != 200:
-            print(f"❌ Erreur HTTP {resp.status_code} : {resp.text}")
+            print(f"[ERROR] Erreur HTTP {resp.status_code} : {resp.text}")
             break
 
         MAX_CONSECUTIVE_404_ERROR_RETRY = 2
@@ -77,7 +77,7 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
         try:
             data = resp.json()
         except ValueError:
-            print(f"⚠️ Réponse non-JSON reçue sur : {next_url}")
+            print(f"[WARNING] Réponse non-JSON reçue sur : {next_url}")
             break
 
         # Extraction des données
@@ -87,11 +87,11 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
         if isinstance(batch, dict):
             batch = list(batch.values())
         if not batch:
-            print("⚠️ Aucune donnée trouvée à ce niveau.")
+            print("[WARNING] Aucune donnée trouvée à ce niveau.")
             break
 
         results.extend(batch)
-        print(f"📦 {len(batch)} éléments ajoutés — total : {len(results)}")
+        print(f"[INFO] {len(batch)} éléments ajoutés — total : {len(results)}")
 
         # Suivre les liens de pagination (uniquement si encore autorisé)
         if MAX_CONSECUTIVE_404_ERROR_RETRY > 0:
@@ -103,12 +103,12 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
                         next_url = link.get("@Href")
                         break
             except Exception as e:
-                print(f"⚠️ Erreur de parsing Meta.Link : {e}")
+                print(f"[WARNING] Erreur de parsing Meta.Link : {e}")
                 break
         else:
             break
 
-    print(f"✅ Récupération terminée : {len(results)} éléments totaux.")
+    print(f"[SUCCESS] Récupération terminée : {len(results)} éléments totaux.")
     return results
 
 def extract_offset_from_url(url):

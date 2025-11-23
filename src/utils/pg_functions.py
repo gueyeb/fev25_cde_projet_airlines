@@ -72,10 +72,10 @@ def insert_dataframe(df, table_name, batch_size: int = 5000):
             with _begin_conn(engine) as conn:
                 conn.execute(stmt)
             inserted_ok += len(batch)
-            _progress(start, end, total_rows, "✔️ Lot traité (doublons ignorés)")
+            _progress(start, end, total_rows, "[OK] Lot traité (doublons ignorés)")
         except IntegrityError as e:
             # Si ce n'est PAS une FK violation, on log et continue en repli ligne à ligne quand même.
-            print(f"⚠️ Conflit d'intégrité sur le lot {start+1}–{end} : {e}. "
+            print(f"[WARNING] Conflit d'intégrité sur le lot {start+1}–{end} : {e}. "
                   f"Repli en insertion ligne à ligne avec SAVEPOINT…")
 
             # 2) Repli sélectif: ligne par ligne avec SAVEPOINT
@@ -94,10 +94,10 @@ def insert_dataframe(df, table_name, batch_size: int = 5000):
                         except IntegrityError as row_err:
                             if _is_fk_violation(row_err):
                                 skipped_fk += 1
-                                print(f"   ↳ ⏭️ Ligne {i+1} ignorée (ForeignKeyViolation 23503)")
+                                print(f"   ↳ [SKIP] Ligne {i+1} ignorée (ForeignKeyViolation 23503)")
                             else:
                                 # Autre violation: on ignore aussi cette ligne mais on l’indique.
-                                print(f"   ↳ ⏭️ Ligne {i+1} ignorée (IntegrityError: {row_err})")
+                                print(f"   ↳ [SKIP] Ligne {i+1} ignorée (IntegrityError: {row_err})")
                             # rollback au SAVEPOINT pour annuler uniquement cette ligne
                             savepoint.rollback()
                         else:
@@ -105,9 +105,9 @@ def insert_dataframe(df, table_name, batch_size: int = 5000):
                     trans.commit()
                 except Exception as fatal:
                     trans.rollback()
-                    print(f"❌ Erreur inattendue lors du repli ligne à ligne: {fatal}")
+                    print(f"[ERROR] Erreur inattendue lors du repli ligne à ligne: {fatal}")
 
-    print(f"✅ Traitement terminé pour {table_name} :")
+    print(f"[SUCCESS] Traitement terminé pour {table_name} :")
     print(f"   - Lignes insérées/traitées (hors doublons) : {inserted_ok}")
     print(f"   - Lignes ignorées pour ForeignKeyViolation : {skipped_fk}")
 

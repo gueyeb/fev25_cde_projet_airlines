@@ -10,7 +10,7 @@ def sync_airports():
     for ap in raw:
         city_code = ap.get("CityCode")
         if not city_exists(city_code):
-            print(f"⚠️ Ville inconnue ignorée : {city_code}")
+            print(f"[WARNING] Ville inconnue ignorée : {city_code}")
             continue
 
         name = None
