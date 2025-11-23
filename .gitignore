@@ -197,3 +197,14 @@ AGENTS.md
 # Project-specific temporary files
 error.txt
 work/
+
+# Prefect
+.prefect/
+prefect.db
+prefect.db-shm
+prefect.db-wal
+
+# Logs
+logs/
+*.log
+nohup.out
