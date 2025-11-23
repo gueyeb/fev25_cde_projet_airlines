@@ -18,3 +18,6 @@ tqdm>=4.66.0
 
 # Timezone data (needed on Windows; harmless elsewhere)
 tzdata>=2024.1; platform_system == "Windows"
+
+# Workflow Orchestration
+prefect>=2.14.0
