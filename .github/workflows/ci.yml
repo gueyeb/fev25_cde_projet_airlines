@@ -64,9 +64,16 @@ jobs:
 
     - name: Run tests
       run: |
-        # Add your test command here when tests are available
-        # pytest tests/ -v --cov=src --cov-report=xml
-        echo "[INFO] No tests defined yet. Skipping test execution."
+        # Run pytest with coverage
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=term
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
 
     - name: Check for security vulnerabilities
       run: |

@@ -208,3 +208,14 @@ prefect.db-wal
 logs/
 *.log
 nohup.out
+
+# Tests et Couverture
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.cover
+
+# Backups
+backups/
