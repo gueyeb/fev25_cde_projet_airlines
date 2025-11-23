@@ -135,6 +135,7 @@ celerybeat.pid
 .testenv
 *.env
 !.env.example
+.prodenv
 .venv
 env/
 venv/
