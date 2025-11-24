@@ -16,8 +16,16 @@ class WeatherService:
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('OPENWEATHER_API_KEY')
-        self.base_url = "https://api.openweathermap.org/data/2.5/weather"
+        # Try multiple environment variable names for flexibility
+        self.api_key = (
+            api_key or
+            os.getenv('OWM_API_KEY') or
+            os.getenv('OPENWEATHER_API_KEY')
+        )
+        self.base_url = os.getenv(
+            'OPENWEATHERMAP_BASE_URL',
+            "https://api.openweathermap.org/data/2.5/weather"
+        )
         self.cache = {}
         self.cache_ttl = timedelta(minutes=15)  # Cache weather for 15 minutes
 

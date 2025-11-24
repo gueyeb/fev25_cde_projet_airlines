@@ -35,6 +35,7 @@ from utils.features import (
 )
 from utils.logging_config import setup_logging, get_logger, get_metrics_collector
 from utils.model_registry import get_model_registry, ModelMetadata
+from utils.prediction_cache import get_prediction_cache
 
 # Setup logging
 setup_logging(log_level=os.getenv('LOG_LEVEL', 'INFO'), use_json=False)
@@ -61,6 +62,7 @@ app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="stati
 weather_service = get_weather_service()
 historical_service = HistoricalDataService(engine)
 model_registry = get_model_registry(APP_DIR / "models")
+prediction_cache = get_prediction_cache(ttl_minutes=int(os.getenv('PREDICTION_CACHE_TTL', '30')))
 
 logger.info("Application starting", version="2.0.0")
 
@@ -81,6 +83,8 @@ class FlightPredictionResponse(BaseModel):
     message: str
     using_mock_data: bool
     warning: Optional[str] = None
+    from_cache: bool = False
+    cached_at: Optional[str] = None
 
 
 class AirportInfo(BaseModel):
@@ -240,7 +244,7 @@ async def get_airports():
 @app.post("/api/predict", response_model=FlightPredictionResponse)
 async def predict_delay(flight_data: FlightPredictionRequest):
     """
-    Predict flight delay based on flight information with enriched features
+    Predict flight delay based on flight information with enriched features and caching
     """
     start_time = time.time()
     success = False
@@ -252,6 +256,22 @@ async def predict_delay(flight_data: FlightPredictionRequest):
         arrival_airport=flight_data.arrival_airport
     ):
         try:
+            # Check cache first
+            cached_result = prediction_cache.get(
+                flight_data.flight_number,
+                flight_data.departure_airport,
+                flight_data.arrival_airport,
+                flight_data.scheduled_departure,
+                flight_data.airline
+            )
+
+            if cached_result is not None:
+                logger.info("Prediction served from cache")
+                metrics.record_cache_hit()
+                return FlightPredictionResponse(**cached_result)
+
+            metrics.record_cache_miss()
+
             # Parse the scheduled departure datetime
             scheduled_dt = datetime.fromisoformat(flight_data.scheduled_departure)
 
@@ -380,14 +400,30 @@ async def predict_delay(flight_data: FlightPredictionRequest):
                 duration_seconds=duration
             )
 
-            return FlightPredictionResponse(
-                prediction=float(predicted_delay),
-                delay_probability=float(delay_probability),
-                factors=factors,
-                message=message,
-                using_mock_data=using_mock,
-                warning=warning_message,
+            # Prepare response
+            response_data = {
+                "prediction": float(predicted_delay),
+                "delay_probability": float(delay_probability),
+                "factors": factors,
+                "message": message,
+                "using_mock_data": using_mock,
+                "warning": warning_message,
+                "from_cache": False,
+                "cached_at": None
+            }
+
+            # Cache the result
+            prediction_cache.set(
+                flight_data.flight_number,
+                flight_data.departure_airport,
+                flight_data.arrival_airport,
+                flight_data.scheduled_departure,
+                response_data,
+                model_version=model_registry.active_version,
+                airline=flight_data.airline
             )
+
+            return FlightPredictionResponse(**response_data)
 
         except ValueError as e:
             logger.error("Invalid datetime format", error=str(e))
@@ -413,8 +449,11 @@ async def health_check():
         "model_version": model_registry.active_version if active_model else None,
         "model_type": active_meta.model_type if active_meta else None,
         "database_connected": check_db_connection(),
-        "cache_stats": get_feature_cache().get_stats(),
-        "weather_cache_stats": weather_service.get_cache_stats()
+        "cache_stats": {
+            "feature_cache": get_feature_cache().get_stats(),
+            "weather_cache": weather_service.get_cache_stats(),
+            "prediction_cache": prediction_cache.get_stats()
+        }
     }
 
 
@@ -435,12 +474,91 @@ async def list_models():
 
 @app.post("/api/models/{version}/activate")
 async def activate_model(version: str):
-    """Activate a specific model version"""
+    """Activate a specific model version and invalidate prediction cache"""
     if model_registry.set_active(version):
-        logger.info("Model version activated", version=version)
-        return {"status": "success", "active_version": version}
+        # Invalidate prediction cache when switching models
+        invalidated = prediction_cache.invalidate_all()
+        logger.info(
+            "Model version activated",
+            version=version,
+            cache_entries_invalidated=invalidated
+        )
+        return {
+            "status": "success",
+            "active_version": version,
+            "cache_entries_invalidated": invalidated
+        }
     else:
         raise HTTPException(status_code=404, detail=f"Model version {version} not found")
+
+
+@app.get("/api/cache/stats")
+async def get_cache_stats():
+    """Get detailed cache statistics"""
+    return {
+        "feature_cache": get_feature_cache().get_stats(),
+        "weather_cache": weather_service.get_cache_stats(),
+        "prediction_cache": {
+            **prediction_cache.get_stats(),
+            "size_mb": prediction_cache.get_cache_size_mb()
+        }
+    }
+
+
+@app.post("/api/cache/invalidate")
+async def invalidate_caches(cache_type: Optional[str] = None):
+    """
+    Invalidate caches
+
+    Args:
+        cache_type: Optional cache type to invalidate (feature, weather, prediction, all)
+    """
+    results = {}
+
+    if cache_type is None or cache_type == "all":
+        # Invalidate all caches
+        get_feature_cache().clear()
+        weather_service.clear_cache()
+        prediction_cache.invalidate_all()
+        results = {
+            "feature_cache": "cleared",
+            "weather_cache": "cleared",
+            "prediction_cache": "cleared"
+        }
+        logger.info("All caches invalidated")
+
+    elif cache_type == "feature":
+        get_feature_cache().clear()
+        results["feature_cache"] = "cleared"
+        logger.info("Feature cache invalidated")
+
+    elif cache_type == "weather":
+        weather_service.clear_cache()
+        results["weather_cache"] = "cleared"
+        logger.info("Weather cache invalidated")
+
+    elif cache_type == "prediction":
+        prediction_cache.invalidate_all()
+        results["prediction_cache"] = "cleared"
+        logger.info("Prediction cache invalidated")
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid cache type: {cache_type}")
+
+    return {"status": "success", "results": results}
+
+
+@app.post("/api/cache/cleanup")
+async def cleanup_expired_caches():
+    """Remove expired entries from all caches"""
+    expired_predictions = prediction_cache.invalidate_expired()
+
+    logger.info("Expired cache entries cleaned up", expired_predictions=expired_predictions)
+
+    return {
+        "status": "success",
+        "expired_predictions_removed": expired_predictions
+    }
 
 
 def check_db_connection():
