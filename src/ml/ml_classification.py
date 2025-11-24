@@ -103,7 +103,8 @@ def train_classification_model(df):
     
     return model
 
-if __name__ == "__main__":
+def main():
+    """Main function to train the classification model"""
     try:
         db_engine = get_db_engine()
         df = load_data_from_db(db_engine)
@@ -114,7 +115,7 @@ if __name__ == "__main__":
             trained_model = train_classification_model(df_processed)
 
             # Sauvegarder le modèle
-            model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_model.pkl"
+            model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_classification_model.pkl"
             model_path.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump(trained_model, model_path)
             print(f"[SUCCESS] Modèle sauvegardé : {model_path}")
@@ -124,3 +125,7 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"[ERROR] Une erreur est survenue : {e}")
+        raise
+
+if __name__ == "__main__":
+    main()

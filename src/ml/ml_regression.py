@@ -104,7 +104,8 @@ def train_model(df):
     
     return model
 
-if __name__ == "__main__":
+def main():
+    """Main function to train the regression model"""
     try:
         db_engine = get_db_engine()
         df = load_data_from_db(db_engine)
@@ -115,13 +116,17 @@ if __name__ == "__main__":
             trained_model = train_model(df_processed)
 
             # Sauvegarder le modèle
-            model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_model.pkl"
+            model_path = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models" / "flight_delay_regression_model.pkl"
             model_path.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump(trained_model, model_path)
-            print("[SUCCESS] Modèle sauvegardé : {model_path}")
+            print(f"[SUCCESS] Modèle sauvegardé : {model_path}")
             print("[SUCCESS] Modèle de machine learning (régression) entraîné avec succès.")
         else:
             print("[WARNING] Le DataFrame est vide. Aucune donnée à traiter.")
 
     except Exception as e:
         print(f"[ERROR] Une erreur est survenue : {e}")
+        raise
+
+if __name__ == "__main__":
+    main()

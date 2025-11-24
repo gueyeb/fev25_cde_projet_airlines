@@ -60,30 +60,50 @@ def train_regression_model_task():
     retries=0,
     log_prints=True
 )
-def validate_models_task():
+def validate_models_task(check_regression: bool = False):
     """
     Validate that the trained models are loadable and functional.
+
+    Args:
+        check_regression: If True, also validates the regression model
     """
     import joblib
     from pathlib import Path
 
     model_dir = PROJECT_ROOT / "flight-delay-predictor" / "app" / "models"
-    model_path = model_dir / "flight_delay_model.pkl"
 
     print("[INFO] Validating trained models...")
 
-    if not model_path.exists():
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+    # Validate classification model (always)
+    classification_model_path = model_dir / "flight_delay_classification_model.pkl"
 
-    # Try to load the model
+    if not classification_model_path.exists():
+        raise FileNotFoundError(f"Classification model file not found: {classification_model_path}")
+
     try:
-        model = joblib.load(model_path)
-        print(f"[SUCCESS] Model loaded successfully from {model_path}")
+        model = joblib.load(classification_model_path)
+        print(f"[SUCCESS] Classification model loaded successfully from {classification_model_path}")
         print(f"[INFO] Model type: {type(model).__name__}")
-        return True
     except Exception as e:
-        print(f"[ERROR] Failed to load model: {e}")
+        print(f"[ERROR] Failed to load classification model: {e}")
         raise
+
+    # Optionally validate regression model
+    if check_regression:
+        regression_model_path = model_dir / "flight_delay_regression_model.pkl"
+
+        if not regression_model_path.exists():
+            raise FileNotFoundError(f"Regression model file not found: {regression_model_path}")
+
+        try:
+            model = joblib.load(regression_model_path)
+            print(f"[SUCCESS] Regression model loaded successfully from {regression_model_path}")
+            print(f"[INFO] Model type: {type(model).__name__}")
+        except Exception as e:
+            print(f"[ERROR] Failed to load regression model: {e}")
+            raise
+
+    return True
 
 
 @flow(
@@ -122,7 +142,7 @@ def ml_training_flow(train_both_models: bool = False):
 
     # Validate models
     print("[STEP 3] Validating models...")
-    validate_models_task()
+    validate_models_task(check_regression=train_both_models)
 
     print("=" * 60)
     print("[FLOW COMPLETE] ML training pipeline completed successfully")
