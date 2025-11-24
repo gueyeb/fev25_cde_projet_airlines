@@ -330,8 +330,6 @@ services:
         condition: service_healthy
     environment:
       PG_META_PORT: 8080
-      # Use connection string to force correct port (workaround for v0.93.0 bug)
-      DATABASE_URL: postgres://supabase_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       PG_META_DB_HOST: ${POSTGRES_HOST}
       PG_META_DB_PORT: ${POSTGRES_PORT}
       PG_META_DB_NAME: ${POSTGRES_DB}

@@ -49,7 +49,7 @@ services:
       PYTHONPATH: /app
       # Database connection to Supabase (direct container connection)
       PG_HOST: dst-airlines-supabase-db
-      PG_PORT: 5433
+      PG_PORT: 5432
       PG_DB: postgres
       PG_USER: postgres
       PG_PASSWORD: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
@@ -82,7 +82,7 @@ services:
       PYTHONPATH: /app
       # Database connection to Supabase (direct container connection)
       PG_HOST: dst-airlines-supabase-db
-      PG_PORT: 5433
+      PG_PORT: 5432
       PG_DB: postgres
       PG_USER: postgres
       PG_PASSWORD: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
