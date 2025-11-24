@@ -8,6 +8,9 @@ from prefect.schedules import Cron
 import sys
 from pathlib import Path
 
+# Add prefect_flows to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 # Import all flows
 from reference_data_flow import reference_data_sync_flow
 from flight_data_flow import daily_flight_data_flow
