@@ -1,9 +1,11 @@
 """
 DST Airlines Flight Delay Predictor - FastAPI Backend
+Enhanced with Phase 3 (Data Enrichment) and Phase 4 (Production Readiness)
 """
 
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -23,8 +25,24 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.utils.pg_functions import engine
 
+# Import new utilities
+from utils.weather import get_weather_service, get_airport_coordinates
+from utils.features import (
+    HistoricalDataService,
+    calculate_time_features,
+    enrich_features_with_history,
+    get_feature_cache
+)
+from utils.logging_config import setup_logging, get_logger, get_metrics_collector
+from utils.model_registry import get_model_registry, ModelMetadata
+
+# Setup logging
+setup_logging(log_level=os.getenv('LOG_LEVEL', 'INFO'), use_json=False)
+logger = get_logger(__name__)
+metrics = get_metrics_collector()
+
 # Initialize FastAPI app
-app = FastAPI(title="DST Airlines Flight Delay Predictor", version="1.0.0")
+app = FastAPI(title="DST Airlines Flight Delay Predictor", version="2.0.0")
 
 # Add CORS middleware
 app.add_middleware(
@@ -38,6 +56,13 @@ app.add_middleware(
 # Mount static files
 APP_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+
+# Initialize services
+weather_service = get_weather_service()
+historical_service = HistoricalDataService(engine)
+model_registry = get_model_registry(APP_DIR / "models")
+
+logger.info("Application starting", version="2.0.0")
 
 
 # Pydantic models for request/response
@@ -65,32 +90,49 @@ class AirportInfo(BaseModel):
     country: Optional[str] = None
 
 
-# Load ML model (placeholder - we'll load actual model later)
-MODEL_PATH = Path(__file__).parent / "models" / "flight_delay_model.pkl"
+# Load ML model using registry
+@app.on_event("startup")
+async def startup_event():
+    """Initialize model registry on startup"""
+    logger.info("Loading models from registry")
 
-
-def load_model():
-    """Load the trained ML model"""
-    if MODEL_PATH.exists():
-        try:
-            return joblib.load(MODEL_PATH)
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            return None
-    return None
-
-
-model = load_model()
-
-# Store the feature columns that the model was trained on
-model_feature_columns = None
+    # Try to auto-load the latest model
+    if model_registry.auto_load_latest():
+        active_model = model_registry.get_active_model()
+        active_meta = model_registry.get_active_metadata()
+        logger.info(
+            "Model loaded successfully",
+            version=model_registry.active_version,
+            model_type=active_meta.model_type if active_meta else "unknown"
+        )
+    else:
+        logger.warning("No model found in registry, predictions will use simulated data")
 
 
 def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime) -> pd.DataFrame:
     """
-    Prepare features in the same format as the ML training pipeline.
+    Prepare features with weather and historical data enrichment.
     This function creates a feature set that matches the training data preprocessing.
     """
+    logger.debug("Preparing features", flight_number=flight_data.flight_number)
+
+    # Get weather data for airports
+    departure_coords = get_airport_coordinates(engine, flight_data.departure_airport)
+    arrival_coords = get_airport_coordinates(engine, flight_data.arrival_airport)
+
+    departure_weather = weather_service.get_weather_by_airport(
+        flight_data.departure_airport, departure_coords
+    )
+    arrival_weather = weather_service.get_weather_by_airport(
+        flight_data.arrival_airport, arrival_coords
+    )
+
+    logger.debug(
+        "Weather data retrieved",
+        departure_weather=departure_weather['condition'],
+        arrival_weather=arrival_weather['condition']
+    )
+
     # Create basic features that we can extract from the request
     features_dict = {
         'total_journey_duration': 0,  # We don't have this information at prediction time
@@ -101,9 +143,18 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
         'arrival_terminal': 'unknown',  # Would need to query from database
         'marketing_carrier_airline_id': flight_data.airline or 'unknown',
         'equipment_aircraft_code': 'unknown',  # Would need to query from database
-        'departure_airport_meteo': 'unknown',  # Would need weather API
-        'arrival_airport_meteo': 'unknown',  # Would need weather API
+        'departure_airport_meteo': departure_weather['condition'],
+        'arrival_airport_meteo': arrival_weather['condition'],
     }
+
+    # Enrich with historical data
+    features_dict = enrich_features_with_history(
+        features_dict,
+        historical_service,
+        flight_data.departure_airport,
+        flight_data.arrival_airport,
+        flight_data.airline
+    )
 
     # Create DataFrame with single row
     df = pd.DataFrame([features_dict])
@@ -120,11 +171,18 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
         'departure_airport_meteo',
         'arrival_airport_meteo'
     ]
+
+    # Add categorical columns that might be in historical data
+    if 'departure_congestion_level' in df.columns:
+        categorical_cols.append('departure_congestion_level')
+
     df = pd.get_dummies(df, columns=categorical_cols)
 
     # Convert durations to minutes
     df['total_journey_duration'] = df['total_journey_duration'] / 60.0
     df['delay_on_departure'] = df['delay_on_departure'] / 60.0
+
+    logger.debug("Features prepared", feature_count=len(df.columns))
 
     return df
 
@@ -182,154 +240,207 @@ async def get_airports():
 @app.post("/api/predict", response_model=FlightPredictionResponse)
 async def predict_delay(flight_data: FlightPredictionRequest):
     """
-    Predict flight delay based on flight information
+    Predict flight delay based on flight information with enriched features
     """
-    try:
-        # Parse the scheduled departure datetime
-        scheduled_dt = datetime.fromisoformat(flight_data.scheduled_departure)
+    start_time = time.time()
+    success = False
 
-        using_mock = model is None
-        warning_message = None
+    with logger.operation_context(
+        'prediction',
+        flight_number=flight_data.flight_number,
+        departure_airport=flight_data.departure_airport,
+        arrival_airport=flight_data.arrival_airport
+    ):
+        try:
+            # Parse the scheduled departure datetime
+            scheduled_dt = datetime.fromisoformat(flight_data.scheduled_departure)
 
-        if model is not None:
-            # Use actual ML model for prediction
-            try:
-                # Prepare features in the same format as training
-                features_df = prepare_features_for_model(flight_data, scheduled_dt)
+            # Get active model from registry
+            model = model_registry.get_active_model()
+            using_mock = model is None
+            warning_message = None
 
-                # Align columns with training data
-                # The model expects specific columns from training
-                # We need to add missing columns with 0 values
-                if hasattr(model, 'feature_names_in_'):
-                    model_columns = model.feature_names_in_
-                    for col in model_columns:
-                        if col not in features_df.columns:
-                            features_df[col] = 0
-                    # Reorder columns to match model training
-                    features_df = features_df[model_columns]
+            if model is not None:
+                # Use actual ML model for prediction
+                try:
+                    # Prepare features in the same format as training
+                    features_df = prepare_features_for_model(flight_data, scheduled_dt)
 
-                # Make prediction using the actual model
-                predicted_delay = model.predict(features_df)[0]
+                    # Align columns with training data
+                    # The model expects specific columns from training
+                    # We need to add missing columns with 0 values
+                    if hasattr(model, 'feature_names_in_'):
+                        model_columns = model.feature_names_in_
+                        for col in model_columns:
+                            if col not in features_df.columns:
+                                features_df[col] = 0
+                        # Reorder columns to match model training
+                        features_df = features_df[model_columns]
 
-                # Calculate probability (for regression, estimate based on magnitude)
-                # Higher delays = higher probability
-                delay_probability = min(1.0, max(0.0, predicted_delay / 60.0))
+                    # Make prediction using the actual model
+                    predicted_delay = model.predict(features_df)[0]
 
-                # Get feature importance if available
-                if hasattr(model, 'feature_importances_'):
-                    importances = model.feature_importances_
-                    # Get top 5 features
-                    top_indices = np.argsort(importances)[-5:][::-1]
-                    top_features = {
-                        features_df.columns[i]: float(importances[i])
-                        for i in top_indices
-                    }
-                    # Normalize to sum to 1
-                    total = sum(top_features.values())
-                    factors = {k: v/total for k, v in top_features.items()}
+                    # Calculate probability (for regression, estimate based on magnitude)
+                    # Higher delays = higher probability
+                    delay_probability = min(1.0, max(0.0, predicted_delay / 60.0))
+
+                    # Get feature importance if available
+                    if hasattr(model, 'feature_importances_'):
+                        importances = model.feature_importances_
+                        # Get top 5 features
+                        top_indices = np.argsort(importances)[-5:][::-1]
+                        top_features = {
+                            features_df.columns[i]: float(importances[i])
+                            for i in top_indices
+                        }
+                        # Normalize to sum to 1
+                        total = sum(top_features.values())
+                        factors = {k: v/total for k, v in top_features.items()}
+                    else:
+                        factors = {
+                            "Time of Day": 0.35,
+                            "Day of Week": 0.25,
+                            "Route Congestion": 0.20,
+                            "Weather Conditions": 0.15,
+                            "Historical Delays": 0.05,
+                        }
+
+                    message = "Prediction generated using ML model"
+                    if predicted_delay > 30:
+                        message = "High delay risk detected (ML prediction)"
+                    elif predicted_delay > 15:
+                        message = "Moderate delay risk (ML prediction)"
+                    else:
+                        message = "Low delay risk (ML prediction)"
+
+                except Exception as e:
+                    logger.error("ML model prediction failed", error=str(e))
+                    # Fall back to mock prediction
+                    using_mock = True
+                    warning_message = f"ML model prediction failed. Using simulated data. Error: {str(e)}"
+
+            if using_mock:
+                # Mock prediction logic when model is not available
+                features = {
+                    "hour": scheduled_dt.hour,
+                    "day_of_week": scheduled_dt.weekday(),
+                }
+
+                base_delay = 0
+                delay_probability = 0.3
+
+                # Higher delays during rush hours
+                if 7 <= features["hour"] <= 9 or 17 <= features["hour"] <= 19:
+                    base_delay = np.random.randint(15, 45)
+                    delay_probability = 0.7
+                elif 6 <= features["hour"] <= 22:
+                    base_delay = np.random.randint(0, 20)
+                    delay_probability = 0.4
                 else:
-                    factors = {
-                        "Time of Day": 0.35,
-                        "Day of Week": 0.25,
-                        "Route Congestion": 0.20,
-                        "Weather Conditions": 0.15,
-                        "Historical Delays": 0.05,
-                    }
+                    base_delay = np.random.randint(0, 10)
+                    delay_probability = 0.2
 
-                message = "Prediction generated using ML model"
+                # Higher delays on Fridays and Sundays
+                if features["day_of_week"] in [4, 6]:
+                    base_delay += 10
+                    delay_probability += 0.1
+
+                # Add some randomness
+                predicted_delay = max(0, base_delay + np.random.randint(-5, 10))
+                delay_probability = min(1.0, delay_probability + np.random.uniform(-0.1, 0.1))
+
+                factors = {
+                    "Time of Day": 0.35,
+                    "Day of Week": 0.25,
+                    "Route Congestion": 0.20,
+                    "Weather Conditions": 0.15,
+                    "Historical Delays": 0.05,
+                }
+
+                message = "Prediction generated using simulation"
                 if predicted_delay > 30:
-                    message = "High delay risk detected (ML prediction)"
+                    message = "High delay risk detected (simulated)"
                 elif predicted_delay > 15:
-                    message = "Moderate delay risk (ML prediction)"
+                    message = "Moderate delay risk (simulated)"
                 else:
-                    message = "Low delay risk (ML prediction)"
+                    message = "Low delay risk (simulated)"
 
-            except Exception as e:
-                print(f"Error using ML model: {e}")
-                import traceback
-                traceback.print_exc()
-                # Fall back to mock prediction
-                using_mock = True
-                warning_message = f"ML model prediction failed. Using simulated data. Error: {str(e)}"
+                if warning_message is None:
+                    warning_message = "ML model not loaded. Using simulated predictions based on time patterns."
 
-        if using_mock:
-            # Mock prediction logic when model is not available
-            features = {
-                "hour": scheduled_dt.hour,
-                "day_of_week": scheduled_dt.weekday(),
-            }
+            # Record metrics
+            duration = time.time() - start_time
+            success = True
+            metrics.record_prediction(duration, using_mock, success)
 
-            base_delay = 0
-            delay_probability = 0.3
+            logger.info(
+                "Prediction completed",
+                predicted_delay=predicted_delay,
+                using_mock=using_mock,
+                duration_seconds=duration
+            )
 
-            # Higher delays during rush hours
-            if 7 <= features["hour"] <= 9 or 17 <= features["hour"] <= 19:
-                base_delay = np.random.randint(15, 45)
-                delay_probability = 0.7
-            elif 6 <= features["hour"] <= 22:
-                base_delay = np.random.randint(0, 20)
-                delay_probability = 0.4
-            else:
-                base_delay = np.random.randint(0, 10)
-                delay_probability = 0.2
+            return FlightPredictionResponse(
+                prediction=float(predicted_delay),
+                delay_probability=float(delay_probability),
+                factors=factors,
+                message=message,
+                using_mock_data=using_mock,
+                warning=warning_message,
+            )
 
-            # Higher delays on Fridays and Sundays
-            if features["day_of_week"] in [4, 6]:
-                base_delay += 10
-                delay_probability += 0.1
-
-            # Add some randomness
-            predicted_delay = max(0, base_delay + np.random.randint(-5, 10))
-            delay_probability = min(1.0, delay_probability + np.random.uniform(-0.1, 0.1))
-
-            factors = {
-                "Time of Day": 0.35,
-                "Day of Week": 0.25,
-                "Route Congestion": 0.20,
-                "Weather Conditions": 0.15,
-                "Historical Delays": 0.05,
-            }
-
-            message = "Prediction generated using simulation"
-            if predicted_delay > 30:
-                message = "High delay risk detected (simulated)"
-            elif predicted_delay > 15:
-                message = "Moderate delay risk (simulated)"
-            else:
-                message = "Low delay risk (simulated)"
-
-            if warning_message is None:
-                warning_message = "ML model not loaded. Using simulated predictions based on time patterns."
-
-        return FlightPredictionResponse(
-            prediction=float(predicted_delay),
-            delay_probability=float(delay_probability),
-            factors=factors,
-            message=message,
-            using_mock_data=using_mock,
-            warning=warning_message,
-        )
-
-    except ValueError as e:
-        print(f"❌ ValueError in /api/predict: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=f"Invalid datetime format: {str(e)}")
-    except Exception as e:
-        print(f"❌ Exception in /api/predict: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+        except ValueError as e:
+            logger.error("Invalid datetime format", error=str(e))
+            duration = time.time() - start_time
+            metrics.record_prediction(duration, True, False)
+            raise HTTPException(status_code=400, detail=f"Invalid datetime format: {str(e)}")
+        except Exception as e:
+            logger.error("Prediction error", error=str(e))
+            duration = time.time() - start_time
+            metrics.record_prediction(duration, True, False)
+            raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with detailed status"""
+    active_model = model_registry.get_active_model()
+    active_meta = model_registry.get_active_metadata()
+
     return {
         "status": "healthy",
-        "model_loaded": model is not None,
+        "model_loaded": active_model is not None,
+        "model_version": model_registry.active_version if active_model else None,
+        "model_type": active_meta.model_type if active_meta else None,
         "database_connected": check_db_connection(),
+        "cache_stats": get_feature_cache().get_stats(),
+        "weather_cache_stats": weather_service.get_cache_stats()
     }
+
+
+@app.get("/api/metrics")
+async def get_metrics():
+    """Get application metrics"""
+    return metrics.get_metrics()
+
+
+@app.get("/api/models")
+async def list_models():
+    """List all available models in the registry"""
+    return {
+        "models": model_registry.get_all_metadata(),
+        "active_version": model_registry.active_version
+    }
+
+
+@app.post("/api/models/{version}/activate")
+async def activate_model(version: str):
+    """Activate a specific model version"""
+    if model_registry.set_active(version):
+        logger.info("Model version activated", version=version)
+        return {"status": "success", "active_version": version}
+    else:
+        raise HTTPException(status_code=404, detail=f"Model version {version} not found")
 
 
 def check_db_connection():
