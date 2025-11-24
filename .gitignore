@@ -220,3 +220,4 @@ coverage.xml
 
 # Backups
 backups/
+supabase/volumes/

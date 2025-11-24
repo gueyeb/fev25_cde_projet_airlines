@@ -54,6 +54,8 @@ class FlightPredictionResponse(BaseModel):
     delay_probability: float
     factors: dict
     message: str
+    using_mock_data: bool
+    warning: Optional[str] = None
 
 
 class AirportInfo(BaseModel):
@@ -79,6 +81,52 @@ def load_model():
 
 
 model = load_model()
+
+# Store the feature columns that the model was trained on
+model_feature_columns = None
+
+
+def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime) -> pd.DataFrame:
+    """
+    Prepare features in the same format as the ML training pipeline.
+    This function creates a feature set that matches the training data preprocessing.
+    """
+    # Create basic features that we can extract from the request
+    features_dict = {
+        'total_journey_duration': 0,  # We don't have this information at prediction time
+        'delay_on_departure': 0,  # We don't have this information at prediction time
+        'departure_day_of_week': scheduled_dt.weekday(),
+        'departure_hour': scheduled_dt.hour,
+        'departure_terminal': 'unknown',  # Would need to query from database
+        'arrival_terminal': 'unknown',  # Would need to query from database
+        'marketing_carrier_airline_id': flight_data.airline or 'unknown',
+        'equipment_aircraft_code': 'unknown',  # Would need to query from database
+        'departure_airport_meteo': 'unknown',  # Would need weather API
+        'arrival_airport_meteo': 'unknown',  # Would need weather API
+    }
+
+    # Create DataFrame with single row
+    df = pd.DataFrame([features_dict])
+
+    # Apply the same preprocessing as training
+    df = df.fillna('unknown')
+
+    # One-hot encode categorical variables (same as training)
+    categorical_cols = [
+        'departure_terminal',
+        'arrival_terminal',
+        'marketing_carrier_airline_id',
+        'equipment_aircraft_code',
+        'departure_airport_meteo',
+        'arrival_airport_meteo'
+    ]
+    df = pd.get_dummies(df, columns=categorical_cols)
+
+    # Convert durations to minutes
+    df['total_journey_duration'] = df['total_journey_duration'] / 60.0
+    df['delay_on_departure'] = df['delay_on_departure'] / 60.0
+
+    return df
 
 
 @app.get("/")
@@ -140,69 +188,126 @@ async def predict_delay(flight_data: FlightPredictionRequest):
         # Parse the scheduled departure datetime
         scheduled_dt = datetime.fromisoformat(flight_data.scheduled_departure)
 
-        # Extract features for prediction
-        features = {
-            "hour": scheduled_dt.hour,
-            "day_of_week": scheduled_dt.weekday(),
-            "month": scheduled_dt.month,
-            "day": scheduled_dt.day,
-            "departure_airport": flight_data.departure_airport,
-            "arrival_airport": flight_data.arrival_airport,
-        }
+        using_mock = model is None
+        warning_message = None
 
-        # Mock prediction for now (replace with actual model)
         if model is not None:
-            # Use actual model when available
-            # prediction = model.predict([features_array])[0]
-            pass
+            # Use actual ML model for prediction
+            try:
+                # Prepare features in the same format as training
+                features_df = prepare_features_for_model(flight_data, scheduled_dt)
 
-        # Mock prediction logic (replace with actual ML model prediction)
-        # Simulate delay based on time of day and day of week
-        base_delay = 0
-        delay_probability = 0.3
+                # Align columns with training data
+                # The model expects specific columns from training
+                # We need to add missing columns with 0 values
+                if hasattr(model, 'feature_names_in_'):
+                    model_columns = model.feature_names_in_
+                    for col in model_columns:
+                        if col not in features_df.columns:
+                            features_df[col] = 0
+                    # Reorder columns to match model training
+                    features_df = features_df[model_columns]
 
-        # Higher delays during rush hours
-        if 7 <= features["hour"] <= 9 or 17 <= features["hour"] <= 19:
-            base_delay = np.random.randint(15, 45)
-            delay_probability = 0.7
-        elif 6 <= features["hour"] <= 22:
-            base_delay = np.random.randint(0, 20)
-            delay_probability = 0.4
-        else:
-            base_delay = np.random.randint(0, 10)
-            delay_probability = 0.2
+                # Make prediction using the actual model
+                predicted_delay = model.predict(features_df)[0]
 
-        # Higher delays on Fridays and Sundays
-        if features["day_of_week"] in [4, 6]:  # Friday and Sunday
-            base_delay += 10
-            delay_probability += 0.1
+                # Calculate probability (for regression, estimate based on magnitude)
+                # Higher delays = higher probability
+                delay_probability = min(1.0, max(0.0, predicted_delay / 60.0))
 
-        # Add some randomness
-        predicted_delay = max(0, base_delay + np.random.randint(-5, 10))
-        delay_probability = min(1.0, delay_probability + np.random.uniform(-0.1, 0.1))
+                # Get feature importance if available
+                if hasattr(model, 'feature_importances_'):
+                    importances = model.feature_importances_
+                    # Get top 5 features
+                    top_indices = np.argsort(importances)[-5:][::-1]
+                    top_features = {
+                        features_df.columns[i]: float(importances[i])
+                        for i in top_indices
+                    }
+                    # Normalize to sum to 1
+                    total = sum(top_features.values())
+                    factors = {k: v/total for k, v in top_features.items()}
+                else:
+                    factors = {
+                        "Time of Day": 0.35,
+                        "Day of Week": 0.25,
+                        "Route Congestion": 0.20,
+                        "Weather Conditions": 0.15,
+                        "Historical Delays": 0.05,
+                    }
 
-        # Mock factors (in a real scenario, these come from feature importance)
-        factors = {
-            "Time of Day": 0.35,
-            "Day of Week": 0.25,
-            "Route Congestion": 0.20,
-            "Weather Conditions": 0.15,
-            "Historical Delays": 0.05,
-        }
+                message = "Prediction generated using ML model"
+                if predicted_delay > 30:
+                    message = "High delay risk detected (ML prediction)"
+                elif predicted_delay > 15:
+                    message = "Moderate delay risk (ML prediction)"
+                else:
+                    message = "Low delay risk (ML prediction)"
 
-        message = "Prediction generated successfully"
-        if predicted_delay > 30:
-            message = "High delay risk detected"
-        elif predicted_delay > 15:
-            message = "Moderate delay risk"
-        else:
-            message = "Low delay risk"
+            except Exception as e:
+                print(f"Error using ML model: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fall back to mock prediction
+                using_mock = True
+                warning_message = f"ML model prediction failed. Using simulated data. Error: {str(e)}"
+
+        if using_mock:
+            # Mock prediction logic when model is not available
+            features = {
+                "hour": scheduled_dt.hour,
+                "day_of_week": scheduled_dt.weekday(),
+            }
+
+            base_delay = 0
+            delay_probability = 0.3
+
+            # Higher delays during rush hours
+            if 7 <= features["hour"] <= 9 or 17 <= features["hour"] <= 19:
+                base_delay = np.random.randint(15, 45)
+                delay_probability = 0.7
+            elif 6 <= features["hour"] <= 22:
+                base_delay = np.random.randint(0, 20)
+                delay_probability = 0.4
+            else:
+                base_delay = np.random.randint(0, 10)
+                delay_probability = 0.2
+
+            # Higher delays on Fridays and Sundays
+            if features["day_of_week"] in [4, 6]:
+                base_delay += 10
+                delay_probability += 0.1
+
+            # Add some randomness
+            predicted_delay = max(0, base_delay + np.random.randint(-5, 10))
+            delay_probability = min(1.0, delay_probability + np.random.uniform(-0.1, 0.1))
+
+            factors = {
+                "Time of Day": 0.35,
+                "Day of Week": 0.25,
+                "Route Congestion": 0.20,
+                "Weather Conditions": 0.15,
+                "Historical Delays": 0.05,
+            }
+
+            message = "Prediction generated using simulation"
+            if predicted_delay > 30:
+                message = "High delay risk detected (simulated)"
+            elif predicted_delay > 15:
+                message = "Moderate delay risk (simulated)"
+            else:
+                message = "Low delay risk (simulated)"
+
+            if warning_message is None:
+                warning_message = "ML model not loaded. Using simulated predictions based on time patterns."
 
         return FlightPredictionResponse(
             prediction=float(predicted_delay),
             delay_probability=float(delay_probability),
             factors=factors,
             message=message,
+            using_mock_data=using_mock,
+            warning=warning_message,
         )
 
     except ValueError as e:

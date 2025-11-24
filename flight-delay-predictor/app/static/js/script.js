@@ -53,17 +53,24 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   function displayResults(result) {
+      // Display warning banner if using mock data
+      if (result.using_mock_data && result.warning) {
+          showWarningBanner(result.warning);
+      } else {
+          hideWarningBanner();
+      }
+
       const probabilityBar = document.getElementById('delay-probability-bar');
       const probabilityText = document.getElementById('delay-probability-text');
       const probability = result.delay_probability * 100;
-      
+
       // Reset classes
       probabilityBar.className = 'progress-bar';
-      
+
       probabilityBar.style.width = `${probability}%`;
       probabilityBar.setAttribute('aria-valuenow', probability);
       probabilityText.textContent = `${probability.toFixed(1)}%`;
-      
+
       // Set color based on probability
       if (probability < 30) {
           probabilityBar.classList.add('bg-success');
@@ -216,14 +223,80 @@ document.addEventListener('DOMContentLoaded', function() {
               <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
           </div>
       `;
-      
+
       document.body.appendChild(toast);
       const bsToast = new bootstrap.Toast(toast);
       bsToast.show();
-      
+
       // Remove toast element after it's hidden
       toast.addEventListener('hidden.bs.toast', () => {
           document.body.removeChild(toast);
       });
   }
+
+  function showWarningBanner(message) {
+      // Remove any existing warning banner
+      hideWarningBanner();
+
+      // Create warning banner
+      const banner = document.createElement('div');
+      banner.id = 'model-warning-banner';
+      banner.className = 'alert alert-warning alert-dismissible fade show mb-4';
+      banner.setAttribute('role', 'alert');
+      banner.innerHTML = `
+          <div class="d-flex align-items-center">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <div>
+                  <strong>Warning:</strong> ${message}
+              </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+
+      // Insert banner at the top of the results card
+      const resultsCard = document.getElementById('results-card');
+      const cardBody = resultsCard.querySelector('.card-body');
+      cardBody.insertBefore(banner, cardBody.firstChild);
+  }
+
+  function hideWarningBanner() {
+      const existingBanner = document.getElementById('model-warning-banner');
+      if (existingBanner) {
+          existingBanner.remove();
+      }
+  }
+
+  // Check model status on page load
+  async function checkModelStatus() {
+      try {
+          const response = await fetch('/api/health');
+          const health = await response.json();
+
+          if (!health.model_loaded) {
+              // Show a persistent info message at the top of the page
+              const infoDiv = document.createElement('div');
+              infoDiv.id = 'model-status-info';
+              infoDiv.className = 'alert alert-info alert-dismissible fade show';
+              infoDiv.setAttribute('role', 'alert');
+              infoDiv.innerHTML = `
+                  <div class="d-flex align-items-center">
+                      <i class="bi bi-info-circle-fill me-2"></i>
+                      <div>
+                          <strong>Note:</strong> ML model not loaded. Predictions will be simulated based on time patterns.
+                      </div>
+                  </div>
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              `;
+
+              // Insert at the top of the main container
+              const container = document.querySelector('.container');
+              container.insertBefore(infoDiv, container.firstChild);
+          }
+      } catch (error) {
+          console.error('Error checking model status:', error);
+      }
+  }
+
+  // Check model status when page loads
+  checkModelStatus();
 });
