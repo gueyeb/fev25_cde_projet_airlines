@@ -1,6 +1,6 @@
 # DST Airlines - Flight Delay Predictor
 
-Système de prédiction de retards de vols combinant collecte de données multi-sources, architecture hybride SQL/NoSQL, et machine learning.
+Système de prédiction de retards de vols combinant collecte de données multi-sources, architecture hybride SQL/NoSQL, orchestration de workflows avec Prefect, et machine learning.
 
 ## 👥 Membres du groupe
 
@@ -19,8 +19,21 @@ fev25_cde_projet_airlines/
 │   └── env_loader.py                 # Chargement des variables d'env
 │
 ├── database/                         # Couche base de données
-│   └── migrations/
-│       └── 1_create_tables.sql       # Schéma PostgreSQL (tables: airlines, airports, routes, etc.)
+│   ├── migrations/                   # Scripts SQL de migration
+│   │   ├── 1_create_tables.sql      # Schéma PostgreSQL complet
+│   │   ├── 2_aircrafts.sql          # Données initiales - avions
+│   │   ├── 3_airlines.sql           # Données initiales - compagnies
+│   │   ├── 4_airports.sql           # Données initiales - aéroports
+│   │   ├── 5_countries.sql          # Données initiales - pays
+│   │   └── 6_cities.sql             # Données initiales - villes
+│   └── schema_init.sql              # Script d'initialisation complet
+│
+├── prefect_flows/                    # Workflows Prefect (orchestration)
+│   ├── reference_data_flow.py        # Flow de synchronisation des données de référence
+│   ├── flight_data_flow.py           # Flow de collecte des vols quotidiens
+│   ├── update_actuals_flow.py        # Flow de mise à jour des statuts de vols
+│   ├── ml_training_flow.py           # Flow d'entraînement ML
+│   └── deploy_flows.py               # Script de déploiement des flows
 │
 ├── src/                              # Code source principal
 │   ├── jobs/                         # Jobs de synchronisation des données
@@ -30,10 +43,12 @@ fev25_cde_projet_airlines/
 │   │   ├── sync_countries.py         # Synchroniser les pays
 │   │   ├── sync_cities.py            # Synchroniser les villes
 │   │   ├── create_routes.py          # Créer les routes avec calcul de distances
-│   │   ├── sync_flight_history.py    # Synchroniser l'historique des vols (BTS)
-│   │   └── update_flight_history.py  # Mise à jour de l'historique
+│   │   └── update_flight_actuals.py  # Mise à jour des statuts de vols en temps réel
 │   │
 │   ├── ml/                           # Modèles de machine learning
+│   │   ├── ml_classification.py      # Modèle de classification (retard Oui/Non)
+│   │   └── ml_regression.py          # Modèle de régression (durée du retard)
+│   │
 │   └── utils/                        # Fonctions utilitaires
 │       ├── pg_functions.py           # Utilitaires PostgreSQL (insert_dataframe, etc.)
 │       ├── weather_functions.py      # Enrichissement météo (OpenWeatherMap)
@@ -44,34 +59,35 @@ fev25_cde_projet_airlines/
 │   │   ├── app.py                    # Point d'entrée FastAPI
 │   │   ├── requirements.txt          # Dépendances de l'application
 │   │   ├── models/                   # Modèles ML (PKL)
+│   │   │   ├── flight_delay_classification_model.pkl
+│   │   │   └── flight_delay_regression_model.pkl
 │   │   ├── utils/                    # Utilitaires backend
 │   │   ├── templates/
 │   │   │   └── index.html            # Interface utilisateur
 │   │   └── static/
 │   │       ├── css/styles.css
 │   │       └── js/script.js
-│   ├── docker-compose.yml            # Configuration Docker pour l'application
-│   └── .env.example                  # Template de configuration
+│   └── Dockerfile                    # Image Docker de l'application
 │
-├── docs/                             # Documentation et rapports
-│   ├── BTS_USA/                      # Données historiques BTS
-│   ├── reports/                      # Rapports du projet
-│   └── assignment/                   # Description du projet
+├── supabase/                         # Instance Supabase auto-hébergée
+│   ├── docker-compose.yml            # Services Supabase (PostgreSQL, Auth, REST, etc.)
+│   └── .env                          # Configuration Supabase
 │
-├── docker-compose.yml                # Services Docker (PostgreSQL + MongoDB)
+├── docker-compose.supabase.yml       # Déploiement production avec Prefect
+├── deploy-dst-airlines.sh            # Script de gestion des services
+├── init_database.sh                  # Script d'initialisation de la base
+├── test_flow.sh                      # Script de test interactif des flows
 ├── requirements.txt                  # Dépendances Python globales
 └── README.md                         # Ce fichier
 ```
 
 ## 🛠️ Prérequis
 
-- **Python 3.8+** (testé avec Python 3.14.0)
-- **pip** (gestionnaire de paquets Python)
-- **PostgreSQL** (local, cloud, ou via Docker)
-- **MongoDB** (optionnel, pour données météo et scraping)
-- **Docker et docker-compose** (optionnel, pour lancer les bases de données)
+- **Python 3.8+** (testé avec Python 3.11)
+- **Docker et docker-compose** (pour Supabase et Prefect)
+- **Accès Internet** (pour les APIs Lufthansa et OpenWeatherMap)
 
-## 🚀 Installation
+## 🚀 Installation et déploiement
 
 ### 1. Cloner le projet
 
@@ -80,160 +96,283 @@ git clone <repository-url>
 cd fev25_cde_projet_airlines
 ```
 
-### 2. Installer les dépendances Python
-
-```bash
-# Dépendances globales (data pipeline)
-pip install -r requirements.txt
-
-# Dépendances de l'application web
-pip install -r flight-delay-predictor/app/requirements.txt
-```
-
-### 3. Configuration des bases de données
-
-**Option A : Utiliser Docker (recommandé pour développement)**
-
-```bash
-docker-compose up -d
-# PostgreSQL: localhost:5438
-# MongoDB: localhost:27018
-```
-
-**Option B : Utiliser une base de données externe (cloud, local)**
-
-Aucune action nécessaire, passez à l'étape 4.
-
-### 4. Configurer les variables d'environnement
+### 2. Configuration des variables d'environnement
 
 ```bash
 # Copier le fichier exemple
 cp config/.env.example config/.env
 
-# Éditer config/.env avec vos credentials :
-# - Clés API (Lufthansa, OpenWeatherMap)
-# - Connexion PostgreSQL (Supabase, local, ou Docker)
-# - Connexion MongoDB (optionnel)
+# Éditer config/.env avec vos credentials
+nano config/.env
 ```
 
-**Exemple de configuration :**
+**Variables importantes à configurer :**
+
 ```bash
-# PostgreSQL (Supabase)
-PG_HOST=your-supabase-host.supabase.com
-PG_PORT=5432
+# PostgreSQL (Supabase auto-hébergé)
+PG_HOST=dst-airlines-supabase-db
+PG_PORT=5433
 PG_DB=postgres
-PG_USER=postgres.xxxxx
-PG_PASSWORD=your-password
+PG_USER=postgres
+PG_PASSWORD=votre_mot_de_passe_securise
+
+# APIs externes
+LH_CLIENT_ID=votre_client_id_lufthansa
+LH_CLIENT_SECRET=votre_secret_lufthansa
+OWM_API_KEY=votre_cle_openweathermap
 
 # MongoDB (optionnel)
-MONGO_URI=mongodb://localhost:27018
+MONGO_URI=mongodb://localhost:27017
 MONGO_DB=dst_airlines
-
-# APIs
-LH_CLIENT_ID=your-lufthansa-client-id
-LH_CLIENT_SECRET=your-lufthansa-secret
-OWM_API_KEY=your-openweathermap-key
 ```
 
-### 5. Initialiser le schéma de base de données
+### 3. Démarrage des services
+
+Le projet utilise un script de gestion pour simplifier le déploiement :
 
 ```bash
-# Exécuter le fichier SQL de migration
-psql -h <PG_HOST> -p <PG_PORT> -U <PG_USER> -d <PG_DB> -f database/migrations/1_create_tables.sql
+# Démarrer tous les services (Supabase + Prefect + Application Web)
+./deploy-dst-airlines.sh start
 
-# Ou via un client PostgreSQL (DBeaver, pgAdmin, etc.)
+# Vérifier le statut des services
+./deploy-dst-airlines.sh status
+
+# Voir les logs
+./deploy-dst-airlines.sh logs
+
+# Arrêter les services
+./deploy-dst-airlines.sh stop
+
+# Redémarrer les services
+./deploy-dst-airlines.sh restart
 ```
 
-## 📊 Pipeline de données (ordre d'exécution)
-
-Exécuter les jobs dans l'ordre suivant pour peupler la base de données :
+### 4. Initialisation de la base de données
 
 ```bash
-# 1. Synchroniser les données de référence depuis l'API Lufthansa
-python -m src.jobs.sync_countries      # Pays
-python -m src.jobs.sync_cities         # Villes
-python -m src.jobs.sync_airlines       # Compagnies aériennes
-python -m src.jobs.sync_airports       # Aéroports
-python -m src.jobs.sync_aircrafts      # Types d'avions
-
-# 2. Créer les routes avec calcul de distances
-python -m src.jobs.create_routes
-
-# 3. Synchroniser l'historique des vols (BTS historical data)
-python -m src.jobs.sync_flight_history
-
-# 4. Enrichir avec les données météo (optionnel)
-python -m src.jobs.enrich_weather_programmed
+# Exécuter le script d'initialisation
+./init_database.sh
 ```
 
-## 🤖 Entraînement du modèle de Machine Learning
+Ce script crée automatiquement :
+- 11 tables PostgreSQL (countries, cities, airlines, airports, aircrafts, routes, etc.)
+- Toutes les séquences nécessaires
+- Les index pour optimiser les performances
+- Les contraintes de clés étrangères
 
-Avant de lancer l'application web, vous devez entraîner le modèle de prédiction.
+### 5. Déploiement des workflows Prefect
 
-### Prérequis
-
-Assurez-vous d'avoir des données dans la table `lufthansa_flight_history` (via `sync_flight_history`).
-
-### Entraîner le modèle
-
-Deux approches sont disponibles :
-
-**Classification** (retard Oui/Non) :
 ```bash
-python -m src.ml.ml_classification
+# Déployer tous les flows avec leurs planifications
+./deploy-dst-airlines.sh deploy-flows
 ```
 
-**Régression** (durée du retard en minutes) :
+Les flows seront automatiquement exécutés selon leur planification.
+
+## 🔄 Workflows Prefect (Orchestration automatisée)
+
+Le projet utilise **Prefect 3** pour orchestrer automatiquement tous les pipelines de données et ML.
+
+### Accès à l'interface Prefect
+
+- **URL locale** : http://localhost:4201
+- **URL production** : https://dst-prefect.srv869578.hstgr.cloud
+
+### Flows disponibles
+
+| Flow | Description | Planification | Fréquence |
+|------|-------------|---------------|-----------|
+| **reference_data_sync_flow** | Synchronisation des données de référence (pays, villes, compagnies, aéroports, avions, routes) | Samedi 1h00 UTC | Hebdomadaire |
+| **daily_flight_data_flow** | Collecte des plannings de vols et données météo | Quotidien 2h00 UTC | Quotidienne |
+| **update_flight_actuals_flow** | Mise à jour des statuts de vols en temps réel | 6h, 10h, 14h, 18h, 22h UTC | 5 fois par jour |
+| **ml_training_flow** | Entraînement des modèles de machine learning | Dimanche 3h00 UTC | Hebdomadaire |
+
+### Exécution manuelle des flows
+
+#### Méthode 1 : Script interactif (recommandé)
+
 ```bash
-python -m src.ml.ml_regression
+./test_flow.sh
+
+# Menu interactif :
+# 1. Reference Data Flow - Synchroniser les données de référence
+# 2. Flight Data Flow - Synchroniser les plannings de vols
+# 3. Update Actuals Flow - Mettre à jour les statuts de vols
+# 4. ML Training Flow - Entraîner les modèles ML
 ```
 
-Les scripts vont :
-1. Charger les données depuis PostgreSQL
-2. Prétraiter et encoder les features
-3. Entraîner le modèle (RandomForest)
-4. Sauvegarder automatiquement le modèle dans `flight-delay-predictor/app/models/flight_delay_model.pkl`
+#### Méthode 2 : Ligne de commande Python
 
-**Note** : Le modèle actuel dans l'application utilise des prédictions simulées. Une fois le modèle `.pkl` généré, l'application le chargera automatiquement au démarrage.
+```bash
+# Flow 1 : Données de référence
+docker exec dst-airlines-prefect-agent python -c "
+import sys
+sys.path.insert(0, '/app/prefect_flows')
+from reference_data_flow import reference_data_sync_flow
+reference_data_sync_flow(skip_routes=False)
+"
+
+# Flow 2 : Données de vols quotidiennes
+docker exec dst-airlines-prefect-agent python -c "
+import sys
+sys.path.insert(0, '/app/prefect_flows')
+from flight_data_flow import daily_flight_data_flow
+daily_flight_data_flow()
+"
+
+# Flow 3 : Mise à jour des statuts de vols
+docker exec dst-airlines-prefect-agent python -c "
+import sys
+sys.path.insert(0, '/app/prefect_flows')
+from update_actuals_flow import update_flight_actuals_flow
+update_flight_actuals_flow()
+"
+
+# Flow 4 : Entraînement ML (classification + régression)
+docker exec dst-airlines-prefect-agent python -c "
+import sys
+sys.path.insert(0, '/app/prefect_flows')
+from ml_training_flow import ml_training_flow
+ml_training_flow(train_both_models=True)
+"
+```
+
+#### Méthode 3 : Via l'interface Prefect UI
+
+1. Accéder à l'interface : https://dst-prefect.srv869578.hstgr.cloud
+2. Cliquer sur **"Deployments"** dans le menu de gauche
+3. Sélectionner un deployment (ex: "weekly-reference-sync")
+4. Cliquer sur le bouton **"Run"** en haut à droite
+5. Ajouter des paramètres si nécessaire
+6. Cliquer sur **"Run"** pour exécuter
+7. Suivre l'exécution dans **"Flow Runs"**
+
+#### Méthode 4 : Via la CLI Prefect
+
+```bash
+# Lister tous les deployments
+docker exec dst-airlines-prefect-agent prefect deployment ls
+
+# Exécuter un deployment spécifique
+docker exec dst-airlines-prefect-agent \
+  prefect deployment run 'reference_data_sync_flow/weekly-reference-sync'
+
+# Exécuter avec des paramètres
+docker exec dst-airlines-prefect-agent \
+  prefect deployment run 'reference_data_sync_flow/weekly-reference-sync' \
+  --param skip_routes=true
+
+# Vérifier les exécutions
+docker exec dst-airlines-prefect-agent prefect flow-run ls --limit 10
+```
+
+### Surveillance et logs
+
+```bash
+# Suivre les logs en temps réel
+docker logs -f dst-airlines-prefect-agent
+
+# Dernières 100 lignes
+docker logs --tail 100 dst-airlines-prefect-agent
+
+# Avec timestamps
+docker logs -f --timestamps dst-airlines-prefect-agent
+
+# Logs du serveur Prefect
+./deploy-dst-airlines.sh logs-prefect
+```
+
+## 🤖 Machine Learning - Modèles de prédiction
+
+Le système entraîne automatiquement deux modèles de prédiction :
+
+### Modèle de Classification
+
+**Objectif** : Prédire si un vol sera en retard (>15 minutes)
+
+- **Algorithme** : RandomForestClassifier (100 arbres)
+- **Sortie** : Binaire (Oui/Non)
+- **Fichier** : `flight_delay_classification_model.pkl`
+- **Métriques** : Accuracy, Precision, Recall, F1-Score
+
+**Features utilisées** :
+- Durée totale du voyage
+- Retard au départ
+- Jour de la semaine
+- Heure de départ
+- Terminal de départ/arrivée
+- Compagnie aérienne
+- Type d'avion
+- Météo aux aéroports de départ/arrivée
+
+### Modèle de Régression
+
+**Objectif** : Prédire la durée du retard en minutes
+
+- **Algorithme** : RandomForestRegressor (100 arbres)
+- **Sortie** : Durée en minutes
+- **Fichier** : `flight_delay_regression_model.pkl`
+- **Métriques** : RMSE (Root Mean Squared Error), R² Score
+
+### Entraînement manuel des modèles
+
+```bash
+# Classification uniquement
+docker exec dst-airlines-prefect-agent python -m src.ml.ml_classification
+
+# Régression uniquement
+docker exec dst-airlines-prefect-agent python -m src.ml.ml_regression
+
+# Les deux modèles via Prefect
+./test_flow.sh
+# Choisir option 4 : ML Training Flow
+```
+
+### Prérequis pour l'entraînement
+
+- Au moins 1000 enregistrements dans `lufthansa_flight_history`
+- Données de vols avec retards (delay_on_arrival et delay_on_departure non NULL)
+- Données météo enrichies (optionnel mais recommandé)
+
+### Utilisation des modèles
+
+Les modèles sont automatiquement chargés par l'application FastAPI au démarrage. Aucune action manuelle n'est nécessaire après l'entraînement.
 
 ## 🌐 Application Web - Flight Delay Predictor
 
 L'application web FastAPI permet de prédire les retards de vols en temps réel.
 
-### Lancement du serveur
+### Accès à l'application
 
-```bash
-cd flight-delay-predictor/app
-python app.py
-
-# Le serveur démarre sur http://localhost:8000
-```
+- **URL locale** : http://localhost:8001
+- **URL production** : https://dst-airlines.srv869578.hstgr.cloud
 
 ### Endpoints API
 
 **Interface utilisateur**
-- `GET /` - Interface utilisateur web
+- `GET /` - Interface web complète
 
 **Prédiction de retards**
 - `GET /api/airports` - Liste des aéroports disponibles
 - `POST /api/predict` - Prédire un retard de vol
 
 **Consultation des données de référence** (avec pagination)
-- `GET /api/data/countries?limit=100&offset=0` - Liste des pays
-- `GET /api/data/cities?limit=100&offset=0` - Liste des villes
-- `GET /api/data/airlines?limit=100&offset=0` - Liste des compagnies aériennes
-- `GET /api/data/airports?limit=100&offset=0` - Liste détaillée des aéroports
-- `GET /api/data/aircrafts?limit=100&offset=0` - Liste des types d'avions
-- `GET /api/data/routes?limit=100&offset=0` - Liste des routes de vol
+- `GET /api/data/countries?limit=100&offset=0` - Pays
+- `GET /api/data/cities?limit=100&offset=0` - Villes
+- `GET /api/data/airlines?limit=100&offset=0` - Compagnies aériennes
+- `GET /api/data/airports?limit=100&offset=0` - Aéroports
+- `GET /api/data/aircrafts?limit=100&offset=0` - Types d'avions
+- `GET /api/data/routes?limit=100&offset=0` - Routes de vol
 
 **Système**
-- `GET /api/health` - Vérification de l'état du système
+- `GET /api/health` - État du système
 
 ### Exemples de requêtes
 
 **Prédire un retard de vol :**
+
 ```bash
-curl -X POST "http://localhost:8000/api/predict" \
+curl -X POST "http://localhost:8001/api/predict" \
   -H "Content-Type: application/json" \
   -d '{
     "flight_number": "LH400",
@@ -244,41 +383,329 @@ curl -X POST "http://localhost:8000/api/predict" \
   }'
 ```
 
-**Consulter les pays :**
+**Consulter les compagnies aériennes :**
+
 ```bash
-curl "http://localhost:8000/api/data/countries?limit=10&offset=0"
+curl "http://localhost:8001/api/data/airlines?limit=10"
 ```
 
-**Consulter les compagnies aériennes :**
+**Vérifier l'état du système :**
+
 ```bash
-curl "http://localhost:8000/api/data/airlines"
+curl "http://localhost:8001/api/health"
 ```
 
 ## 🧠 Architecture technique
 
-### Base de données hybride
+### Services Docker
 
-**PostgreSQL** (données structurées et de référence) :
-- `airlines`, `airports`, `countries`, `cities`, `aircrafts` - Données Lufthansa API
-- `routes` - Routes de vol avec distances calculées (geopy)
-- `bts_flight_history` - Historique brut des vols US (BTS Transtats)
-- `lufthansa_flight_history` - Données en temps réel Lufthansa
-- `historical_flights` - Table normalisée pour ML
+Le projet déploie les services suivants :
 
-**MongoDB** (données variables et semi-structurées) :
-- Collection `weather` - Données météo avec TTL automatique
-- Collection FlightRadar24 - Résultats du scraping
+1. **Supabase PostgreSQL** : Base de données principale (port 5433)
+2. **Supabase Services** : Auth, REST API, Realtime, Storage, Studio
+3. **Prefect Server** : Serveur d'orchestration (port 4201)
+4. **Prefect Worker** : Exécution des workflows
+5. **FastAPI Web App** : Application de prédiction (port 8001)
+
+### Base de données PostgreSQL
+
+**Tables principales** :
+
+| Table | Description | Lignes |
+|-------|-------------|--------|
+| `countries` | Pays | ~100 |
+| `cities` | Villes | ~3000 |
+| `airlines` | Compagnies aériennes | ~500 |
+| `airports` | Aéroports | ~8000 |
+| `aircrafts` | Types d'avions | ~300 |
+| `routes` | Routes de vol avec distances | ~50000 |
+| `lufthansa_flight_history` | Historique des vols Lufthansa | Variable |
+| `bts_flight_history` | Historique BTS (USA) | ~100000 |
+| `historical_flights` | Table normalisée pour ML | Variable |
+| `weather_hourly_cache` | Cache météo horaire | Variable |
+| `owm_api_quota` | Suivi des quotas API OpenWeatherMap | ~365 |
 
 ### Sources de données
 
 1. **Lufthansa Developer API** - Données de référence et vols en temps réel
-2. **BTS Transtats** - Historique des retards de vols aux USA (CSV)
-3. **OpenWeatherMap API** - Corrélation météo/retards
-4. **FlightRadar24** - Données complémentaires (scraping)
+   - URL : https://developer.lufthansa.com
+   - Fréquence : Temps réel / Quotidien
+   - Limites : Rate limiting (requêtes par seconde)
 
-## 🔑 APIs utilisées
+2. **OpenWeatherMap API** - Données météo
+   - URL : https://openweathermap.org/api
+   - Fréquence : Temps réel
+   - Limites : 1000 appels/jour (gratuit)
 
-- **Lufthansa Developer API** - https://developer.lufthansa.com
-- **OpenWeatherMap API** - https://openweathermap.org/api
-- **BTS Transtats** - https://www.transtats.bts.gov (téléchargement CSV)
-- **FlightRadar24** - https://www.flightradar24.com (scraping)
+3. **BTS Transtats** - Historique des retards de vols aux USA
+   - URL : https://www.transtats.bts.gov
+   - Format : CSV (téléchargement)
+
+### Architecture réseau
+
+```
+Internet
+  │
+  ├─→ Traefik (Reverse Proxy + SSL)
+  │     │
+  │     ├─→ dst-airlines.srv869578.hstgr.cloud → FastAPI Web App
+  │     ├─→ dst-prefect.srv869578.hstgr.cloud → Prefect Server UI
+  │     └─→ dst-airlines-studio.srv869578.hstgr.cloud → Supabase Studio
+  │
+  └─→ Docker Network
+        │
+        ├─→ Supabase PostgreSQL (5433)
+        ├─→ Prefect Server (4201)
+        ├─→ Prefect Worker
+        └─→ FastAPI App (8001)
+```
+
+## 📊 Flux de données
+
+### 1. Initialisation (première fois)
+
+```mermaid
+Lufthansa API → Countries/Cities/Airlines/Airports/Aircrafts → PostgreSQL
+                     ↓
+               Calculate Routes (geopy)
+                     ↓
+              Store in PostgreSQL
+```
+
+### 2. Pipeline quotidien
+
+```mermaid
+Prefect Scheduler (2h00 UTC)
+         ↓
+Lufthansa API → Flight Schedules → PostgreSQL
+         ↓
+OpenWeatherMap API → Weather Data → PostgreSQL
+```
+
+### 3. Mise à jour temps réel (5x par jour)
+
+```mermaid
+Prefect Scheduler (6h, 10h, 14h, 18h, 22h UTC)
+         ↓
+Lufthansa API → Flight Status → Update PostgreSQL
+```
+
+### 4. Entraînement ML (hebdomadaire)
+
+```mermaid
+Prefect Scheduler (Dimanche 3h00 UTC)
+         ↓
+PostgreSQL → Load Historical Data
+         ↓
+Preprocessing (One-Hot Encoding, Feature Engineering)
+         ↓
+Train RandomForest Models (Classification + Regression)
+         ↓
+Save PKL Files → FastAPI Auto-Reload
+```
+
+## 🔧 Dépannage
+
+### Les flows ne s'exécutent pas
+
+```bash
+# Vérifier que Prefect Server est démarré
+docker ps | grep prefect
+
+# Vérifier les logs
+docker logs dst-airlines-prefect-agent
+
+# Redémarrer les services
+./deploy-dst-airlines.sh restart
+```
+
+### Erreur de connexion à la base de données
+
+```bash
+# Vérifier que Supabase PostgreSQL est démarré
+docker ps | grep supabase-db
+
+# Tester la connexion
+docker exec dst-airlines-supabase-db psql -U postgres -c "SELECT 1;"
+
+# Vérifier les variables d'environnement
+docker exec dst-airlines-prefect-agent env | grep PG_
+```
+
+### L'application web ne démarre pas
+
+```bash
+# Vérifier les logs
+docker logs dst-airlines-web
+
+# Vérifier que les modèles ML existent
+docker exec dst-airlines-web ls -la /app/flight-delay-predictor/app/models/
+
+# Redémarrer l'application
+docker restart dst-airlines-web
+```
+
+### Erreurs API Lufthansa (Rate Limiting)
+
+Les flows incluent une gestion automatique des erreurs de rate limiting avec :
+- Retry automatique (30 secondes de délai)
+- Limitation à 20 éléments par requête
+- Gestion gracieuse des erreurs 403
+
+### Vérifier l'état global du système
+
+```bash
+# Statut de tous les services
+./deploy-dst-airlines.sh status
+
+# Vérifier la santé de l'application
+curl http://localhost:8001/api/health
+
+# Vérifier Prefect
+curl http://localhost:4201/api/health
+```
+
+## 🔑 APIs et authentification
+
+### Lufthansa Developer API
+
+1. Créer un compte sur https://developer.lufthansa.com
+2. Créer une application pour obtenir Client ID et Client Secret
+3. Ajouter les credentials dans `config/.env`
+
+**Endpoints utilisés** :
+- `/mds-references/countries` - Pays
+- `/mds-references/cities` - Villes
+- `/mds-references/airlines` - Compagnies
+- `/mds-references/airports` - Aéroports
+- `/mds-references/aircraft` - Avions
+- `/operations/schedules` - Plannings de vols
+- `/operations/flightstatus` - Statuts en temps réel
+
+### OpenWeatherMap API
+
+1. Créer un compte sur https://openweathermap.org
+2. Générer une clé API (gratuit : 1000 appels/jour)
+3. Ajouter la clé dans `config/.env`
+
+**Endpoint utilisé** :
+- `/data/2.5/weather` - Météo actuelle par coordonnées
+
+## 📈 Métriques et performances
+
+### Volumétrie
+
+- **Données de référence** : ~12 000 enregistrements
+- **Vols historiques** : ~100 000 enregistrements (BTS)
+- **Vols temps réel** : Variable (ajout quotidien)
+- **Cache météo** : ~1000 enregistrements (TTL : 24h)
+
+### Performances d'entraînement ML
+
+- **Classification** : ~2-5 minutes pour 10 000 vols
+- **Régression** : ~3-6 minutes pour 10 000 vols
+- **Accuracy** : ~75-85% (dépend du volume de données)
+- **RMSE** : ~20-30 minutes (régression)
+
+## 📝 Commandes utiles
+
+```bash
+# Gestion des services
+./deploy-dst-airlines.sh start        # Démarrer tous les services
+./deploy-dst-airlines.sh stop         # Arrêter tous les services
+./deploy-dst-airlines.sh restart      # Redémarrer tous les services
+./deploy-dst-airlines.sh status       # Vérifier le statut
+./deploy-dst-airlines.sh logs         # Voir tous les logs
+./deploy-dst-airlines.sh logs-prefect # Logs Prefect uniquement
+./deploy-dst-airlines.sh deploy-flows # Déployer les workflows
+
+# Test des flows
+./test_flow.sh                        # Menu interactif
+
+# Initialisation
+./init_database.sh                    # Créer les tables
+
+# Docker
+docker ps                             # Voir les conteneurs actifs
+docker logs -f <container>            # Suivre les logs
+docker exec -it <container> bash      # Accéder au conteneur
+docker compose -f docker-compose.supabase.yml ps  # Statut Supabase
+```
+
+## 👨‍💻 Développement
+
+### Structure des flows Prefect
+
+Chaque flow suit cette structure :
+
+```python
+from prefect import flow, task
+
+@task(retries=2, retry_delay_seconds=30)
+def ma_tache():
+    # Logique métier
+    pass
+
+@flow(log_prints=True)
+def mon_flow():
+    print("[FLOW START] Début du traitement")
+    ma_tache()
+    print("[FLOW COMPLETE] Traitement terminé")
+```
+
+### Ajouter un nouveau flow
+
+1. Créer le fichier dans `prefect_flows/`
+2. Définir les tasks et le flow
+3. Ajouter le deployment dans `deploy_flows.py`
+4. Redéployer : `./deploy-dst-airlines.sh deploy-flows`
+
+### Tests locaux
+
+```bash
+# Tester un job individuellement
+docker exec dst-airlines-prefect-agent python -m src.jobs.sync_countries
+
+# Tester un modèle ML
+docker exec dst-airlines-prefect-agent python -m src.ml.ml_classification
+
+# Tester l'application web localement
+cd flight-delay-predictor/app
+python app.py
+```
+
+## 📚 Documentation complémentaire
+
+- **Guide de déploiement** : `DEPLOYMENT_GUIDE.md` (sur le serveur)
+- **Guide de test des flows** : `FLOW_TESTING_GUIDE.md` (sur le serveur)
+- **Configuration Supabase** : `SUPABASE_SETUP.md` (sur le serveur)
+- **Documentation Prefect** : https://docs.prefect.io
+- **Documentation FastAPI** : https://fastapi.tiangolo.com
+
+## 🤝 Contribution
+
+Pour contribuer au projet :
+
+1. Fork le repository
+2. Créer une branche (`git checkout -b feature/ma-fonctionnalite`)
+3. Commit les changements (`git commit -m 'Ajout de ma fonctionnalité'`)
+4. Push vers la branche (`git push origin feature/ma-fonctionnalite`)
+5. Créer une Pull Request
+
+## 📄 Licence
+
+Ce projet est développé dans le cadre académique de la formation Data Engineering à Datascientest.
+
+## 🆘 Support
+
+Pour toute question ou problème :
+
+1. Vérifier les logs : `./deploy-dst-airlines.sh logs`
+2. Consulter la documentation dans `/docs`
+3. Contacter l'équipe de développement
+
+---
+
+**Version** : 2.0
+**Dernière mise à jour** : Novembre 2024
+**Technologies** : Python 3.11, Prefect 3, FastAPI, PostgreSQL, Supabase, Docker, scikit-learn
