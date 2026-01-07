@@ -1,40 +1,41 @@
-# Workflow Orchestration: Airflow vs Prefect
+# Orchestration de Workflows : Airflow vs Prefect
 
-## Executive Summary
+> La version anglaise d'origine est archivée dans `docs/archive/ORCHESTRATION_WORKFLOW_FR.md`. Ce document devient la référence active en français.
 
-For your current project scope (flight delay prediction with simple ETL pipelines), **we recommend starting with cron jobs** or a lightweight scheduler. If you need a proper workflow orchestration tool, **Prefect** is the better choice over Airflow for your use case.
+## Résumé exécutif
 
-## Why NOT Airflow or Grafana?
+Pour notre périmètre actuel (prédiction de retards avec pipelines ETL simples), **les tâches cron suffisent** pour démarrer. Si un orchestrateur complet devient nécessaire, **Prefect** est mieux adapté qu'Airflow.
+
+## Pourquoi PAS Airflow ou Grafana ?
 
 ### Grafana
-- **Grafana is a monitoring/visualization tool, NOT a workflow orchestrator**
-- It's used for dashboards and metrics visualization
-- Cannot schedule or run data pipelines
-- You might use Grafana later to monitor your ML model performance, but it won't orchestrate workflows
+- Outil de visualisation/monitoring, **pas** un orchestrateur.
+- Sert aux tableaux de bord et métriques.
+- Ne peut ni planifier ni exécuter des pipelines.
+- Utile plus tard pour suivre le modèle ML, mais pas pour orchestrer.
 
-### Airflow Drawbacks for Simple Projects
-1. **Heavy infrastructure** - Requires multiple components (webserver, scheduler, database, executor)
-2. **Complex setup** - Steep learning curve
-3. **Over-engineered** for simple pipelines
-4. **Resource intensive** - Needs significant memory and CPU
-5. **DAG development overhead** - Python DAGs can be verbose
+### Limites d'Airflow pour ce projet
+1. **Infrastructure lourde** : webserver, scheduler, DB, executor.
+2. **Mise en place complexe** : forte courbe d'apprentissage.
+3. **Surdimensionné** pour des pipelines simples.
+4. **Ressources élevées** : mémoire/CPU importants.
+5. **DAGs verbeux** : surcharge de développement.
 
-## Why Prefect?
+## Pourquoi Prefect ?
 
-### Advantages
-1. **Lightweight** - Can run on a single machine
-2. **Simple setup** - `pip install prefect` and you're ready
-3. **Python-native** - Write flows like normal Python functions
-4. **Modern design** - Built for cloud-native workflows
-5. **Free tier** - Prefect Cloud has a generous free tier
-6. **Better error handling** - Automatic retries, logging, and alerting
-7. **Dynamic workflows** - Easier to create conditional pipelines
+### Atouts
+1. **Léger** : tourne sur une seule machine.
+2. **Setup rapide** : `pip install prefect`.
+3. **Natif Python** : flows = fonctions Pythons classiques.
+4. **Pensé cloud-native**.
+5. **Niveau gratuit généreux** (Prefect Cloud).
+6. **Gestion d'erreurs moderne** : retries, logs, alertes.
+7. **Workflows dynamiques** plus simples.
 
-### Example Prefect Flow
+### Exemple de flow Prefect
 
 ```python
 from prefect import flow, task
-from datetime import timedelta
 
 @task(retries=3, retry_delay_seconds=60)
 def sync_countries():
@@ -50,61 +51,49 @@ def sync_cities():
 def daily_pipeline():
     sync_countries()
     sync_cities()
-    # Add more tasks...
+    # Ajouter d'autres tâches…
 
 if __name__ == "__main__":
     daily_pipeline()
 ```
 
-## Recommendation Tiers
+## Paliers de recommandation
 
-### Tier 1: Start Simple (Recommended for now)
-Use **cron jobs** with a monitoring script:
-- Cost: Free
-- Complexity: Low
-- Setup time: 30 minutes
-- Good for: Simple, scheduled tasks
+### Niveau 1 : Simple (recommandé maintenant)
+- **Cron** + script de monitoring.
+- Coût : 0€ – Complexité : faible – Mise en place : ~30 min.
 
-### Tier 2: Lightweight Orchestration
-Use **Prefect** if you need:
-- Task dependencies
-- Retry logic
-- Better monitoring
-- Dynamic workflows
-- Setup time: 2-4 hours
+### Niveau 2 : Orchestration légère
+- **Prefect** si besoin de dépendances, retries, monitoring, workflows dynamiques.
+- Effort : 2 à 4 h.
 
-### Tier 3: Enterprise (NOT recommended for your scale)
-Use **Airflow** only if you have:
-- Dozens of complex pipelines
-- Team of data engineers
-- Dedicated infrastructure
-- Setup time: Several days
+### Niveau 3 : Entreprise (non pertinent ici)
+- **Airflow** uniquement si dizaines de pipelines, équipe dédiée et infra disponible.
+- Effort : plusieurs jours.
 
-## Implementation Plan
+## Plan d'implémentation (cron)
 
-We'll set up a simple cron-based scheduler that:
-1. Runs daily data sync at 2 AM
-2. Updates flight statuses every 4 hours
-3. Logs all execution results
-4. Sends alerts on failures (optional)
+1. Synchronisation quotidienne à 02h00.
+2. Mise à jour des statuts toutes les 4h.
+3. Journalisation systématique.
+4. Alertes optionnelles en cas d'échec.
 
-## When to Upgrade to Prefect
+## Quand migrer vers Prefect ?
 
-Consider Prefect when you:
-- Have more than 5 different pipelines
-- Need complex task dependencies
-- Want better failure handling
-- Need to scale execution
-- Want a UI to monitor runs
+- >5 pipelines différents.
+- Dépendances complexes.
+- Besoin d'une meilleure résilience aux échecs.
+- Nécessité d'évoluer en volume.
+- Besoin d'une UI de supervision.
 
-## Cost Comparison
+## Comparatif des coûts
 
-| Tool | Infrastructure Cost | Learning Time | Maintenance |
-|------|-------------------|---------------|-------------|
-| Cron | $0 | 1 hour | Minimal |
-| Prefect | $0-50/month | 4-8 hours | Low |
-| Airflow | $100-500/month | 20-40 hours | High |
+| Outil   | Coût infra | Temps d'apprentissage | Maintenance |
+|---------|-----------|-----------------------|-------------|
+| Cron    | 0€        | ~1 h                  | Minimale    |
+| Prefect | 0–50€/mois| 4–8 h                 | Faible      |
+| Airflow | 100–500€/mois | 20–40 h           | Élevée      |
 
 ## Conclusion
 
-Start with cron jobs now. If your project grows and you need more sophisticated orchestration, migrate to Prefect (migration is straightforward). Skip Airflow unless you have enterprise requirements.
+Commencer avec des tâches cron. Lorsque la complexité grandit, migrer vers Prefect (transition simple). Réserver Airflow aux besoins véritablement « enterprise ».

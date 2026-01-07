@@ -91,9 +91,9 @@ Quatre workflows automatisés :
 - `scripts/prefect/start_agent.sh`
 
 **Documentation :**
-- `GUIDE_PREFECT.md` - Guide complet de configuration et d'utilisation
-- `ORCHESTRATION_WORKFLOW.md` - Décisions d'architecture et comparaison d'outils
-- `prefect_flows/README_FR.md` - Documentation spécifique aux flows
+- `PREFECT_GUIDE.md` - Guide complet de configuration et d'utilisation (FR)
+- `WORKFLOW_ORCHESTRATION.md` - Décisions d'architecture et comparaison d'outils (FR)
+- `prefect_flows/README.md` - Documentation spécifique aux flows
 
 **Dépendances :**
 - Ajout de `prefect>=2.14.0` à `requirements.txt`
@@ -147,7 +147,7 @@ Aucun. Tous les changements sont additifs.
 
 - Le fichier `.prodenv` existant doit être recréé localement (non suivi dans git)
 - Utiliser `config/.env.example` comme modèle pour les variables d'environnement requises
-- Pour Prefect : Exécuter le script de configuration ou suivre la configuration manuelle dans `GUIDE_PREFECT.md`
+- Pour Prefect : Exécuter le script de configuration ou suivre la configuration manuelle dans `PREFECT_GUIDE.md`
 
 ## Fichiers Modifiés
 
@@ -158,9 +158,9 @@ Aucun. Tous les changements sont additifs.
 ## Documentation
 
 Toutes les nouvelles fonctionnalités sont entièrement documentées :
-- `GUIDE_PREFECT.md` - Configuration et utilisation de Prefect
-- `ORCHESTRATION_WORKFLOW.md` - Stratégie d'orchestration
-- `prefect_flows/README_FR.md` - Documentation des flows
+- `PREFECT_GUIDE.md` - Configuration et utilisation de Prefect
+- `WORKFLOW_ORCHESTRATION.md` - Stratégie d'orchestration
+- `prefect_flows/README.md` - Documentation des flows
 - `.github/workflows/ci.yml` - Commentaires du pipeline CI/CD
 
 ## Liste de Contrôle de Revue

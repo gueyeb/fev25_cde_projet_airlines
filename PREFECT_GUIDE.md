@@ -1,341 +1,230 @@
-# Prefect Workflow Orchestration Guide
+﻿# Guide d'Orchestration Prefect
 
-## Overview
+> Pour les paramètres spécifiques à chaque flow et les instructions localisées, consultez `prefect_flows/README.md` (FR). Ce document couvre l'exploitation globale de la plateforme.
 
-This project uses **Prefect** for workflow orchestration to manage data pipelines and ML training schedules. Prefect provides:
+## Vue d'ensemble
 
-- **Automated scheduling** - Run pipelines on cron schedules
-- **Retry logic** - Automatic retries on failures
-- **Monitoring** - Web UI to track pipeline runs
-- **Logging** - Centralized logs for all tasks
-- **Notifications** - Alerts on failures (configurable)
+Nous utilisons **Prefect** pour orchestrer nos pipelines de données et nos entraînements ML. Prefect apporte :
+
+- **Planification automatisée** : exécution des pipelines selon des règles cron
+- **Logique de réessai** : retries automatiques en cas d'échec
+- **Surveillance** : UI web pour suivre les runs
+- **Journalisation centralisée** : logs consolidés par flow/tâche
+- **Notifications** : alertes configurables sur les échecs
 
 ## Architecture
 
-### Flows Organized by Function
-
-Our pipeline is split into 4 main flows:
+### Flows organisés par fonction
 
 1. **Reference Data Flow** (`reference_data_flow.py`)
-   - Syncs reference data: countries, cities, airlines, airports, aircrafts, routes
-   - Schedule: **Weekly (Saturdays at 1:00 AM UTC)**
-   - Why: Reference data rarely changes
+   - Synchronise pays, villes, compagnies, aéroports, avions, routes
+   - Planification : **hebdomadaire (samedi 01h00 UTC)**
 
 2. **Daily Flight Data Flow** (`flight_data_flow.py`)
-   - Syncs flight schedules for specific dates
-   - Enriches with weather data
-   - Schedule: **Daily (2:00 AM UTC)**
-   - Why: Lufthansa API provides limited time window for schedules
+   - Récupère les horaires de vols et enrichit avec la météo
+   - Planification : **quotidienne (02h00 UTC)**
 
 3. **Update Actuals Flow** (`update_actuals_flow.py`)
-   - Updates real-time flight status (delays, actual times)
-   - Refreshes weather based on actual times
-   - Schedule: **Every 4 hours (6 AM - 10 PM UTC)**
-   - Why: Real-time data changes throughout the day
+   - Met à jour retards/statuts temps réel + météo associée
+   - Planification : **toutes les 4h de 06h à 22h UTC**
 
 4. **ML Training Flow** (`ml_training_flow.py`)
-   - Trains classification model
-   - Validates model can be loaded
-   - Schedule: **Weekly (Sundays at 3:00 AM UTC)**
-   - Why: Model improves as more data accumulates
+   - Réentraîne le modèle de classification et vérifie le chargement
+   - Planification : **hebdomadaire (dimanche 03h00 UTC)**
 
-## Setup
+## Mise en place
 
-### Prerequisites
+### Prérequis
 
 ```bash
-# Install dependencies
+# Installer les dépendances
 pip install -r requirements.txt
 
-# Verify installation
+# Vérifier la version
 python -c "import prefect; print(f'Prefect {prefect.__version__}')"
 ```
 
-### Quick Setup
-
-Run the automated setup script:
+### Configuration rapide
 
 ```bash
 ./scripts/prefect/setup_prefect.sh
 ```
 
-This will:
-1. Install Prefect
-2. Start Prefect server (or connect to Prefect Cloud)
-3. Create work pool
-4. Create storage blocks
-5. Deploy all flows with schedules
+Le script :
+1. Installe Prefect
+2. Démarre le serveur local (ou se connecte à Cloud)
+3. Crée le work pool
+4. Crée les blocs de stockage
+5. Déploie tous les flows avec leur planification
 
-### Manual Setup
-
-If you prefer manual setup:
+### Configuration manuelle
 
 ```bash
-# 1. Start Prefect server (local development)
+# Serveur local ou login Prefect Cloud
 prefect server start
-
-# OR connect to Prefect Cloud (production)
+# ou
 prefect cloud login
 
-# 2. Create work pool
+# Work pool process
 prefect work-pool create default --type process
 
-# 3. Create storage block
+# Bloc de stockage local
 python -c "from prefect.filesystems import LocalFileSystem; LocalFileSystem(basepath='.').save('local-storage', overwrite=True)"
 
-# 4. Deploy flows
+# Déploiement des flows
 cd prefect_flows
 python deploy_flows.py
 ```
 
-## Running the Pipeline
+## Exécution des pipelines
 
-### Starting the Agent
-
-The agent executes scheduled flow runs:
+### Démarrer l'agent
 
 ```bash
-# Option 1: Interactive mode
+# Mode interactif
 prefect agent start -q default
 
-# Option 2: Background mode with logs
+# Mode script (logs)
 ./scripts/prefect/start_agent.sh
 ```
 
-**Important:** Keep the agent running for scheduled flows to execute!
+> L'agent doit rester actif pour consommer les runs planifiés.
 
-### Manual Execution
-
-Run flows manually (useful for testing):
+### Exécution manuelle (tests)
 
 ```bash
-# From project root
 cd prefect_flows
-
-# Run reference data sync
 python reference_data_flow.py
-
-# Run daily pipeline
 python flight_data_flow.py
-
-# Update flight actuals
 python update_actuals_flow.py
-
-# Train ML model
 python ml_training_flow.py
 ```
 
-### Triggering Deployments
-
-Run a scheduled deployment on-demand:
+### Déclencher un déploiement
 
 ```bash
-# List all deployments
 prefect deployment ls
-
-# Run a specific deployment
 prefect deployment run 'daily-flight-data-pipeline/daily-flight-pipeline'
 
-# Run with custom parameters
+# Paramètres custom
 prefect deployment run 'daily-flight-data-pipeline/daily-flight-pipeline' \
   --param target_date='2025-01-15' \
   --param weather_budget=500
 ```
 
-## Schedule Summary
+## Résumé des planifications
 
-| Flow | Schedule | Frequency | Purpose |
-|------|----------|-----------|---------|
-| Reference Data Sync | Sat 1:00 AM | Weekly | Update rarely-changing data |
-| Daily Flight Pipeline | Daily 2:00 AM | Daily | Get new flight schedules |
-| Update Actuals | 6AM-10PM every 4h | 5x per day | Real-time flight status |
-| ML Training | Sun 3:00 AM | Weekly | Retrain models with new data |
+| Flow | Planification | Fréquence | Objectif |
+|------|---------------|-----------|----------|
+| Reference Data Sync | Samedi 01h00 | Hebdo | Rafraîchir données de référence |
+| Daily Flight Pipeline | Quotidien 02h00 | Quotidien | Charger nouveaux horaires + météo |
+| Update Actuals | 06h–22h toutes 4h | 5×/jour | Statuts temps réel |
+| ML Training | Dimanche 03h00 | Hebdo | Réentraîner les modèles |
 
-**Note:** All times are in UTC. Adjust for your timezone.
+> Tous les horaires sont en UTC.
 
 ## Monitoring
 
-### Prefect UI
+### Interface Prefect
 
-Access the web interface:
+- **Local** : http://localhost:4200
+- **Cloud** : https://app.prefect.cloud
 
-- **Local Server:** http://localhost:4200
-- **Prefect Cloud:** https://app.prefect.cloud
-
-The UI shows:
-- Flow run history
-- Success/failure rates
-- Execution logs
-- Task-level details
-- Scheduled runs
+Suivi : historique, taux de succès, logs, détails par tâche, runs planifiés.
 
 ### Logs
 
-Prefect writes logs to:
-- **Agent logs:** `logs/prefect/agent.log`
-- **Server logs:** `logs/prefect-server.log` (local server only)
-- **Flow logs:** Visible in Prefect UI
+- Agent : `logs/prefect/agent.log`
+- Serveur local : `logs/prefect-server.log`
+- Logs de flow : visibles dans l'UI
 
-## Common Operations
+## Opérations courantes
 
-### Pause a Deployment
+- **Mettre en pause** : `prefect deployment pause 'daily-flight-data-pipeline/daily-flight-pipeline'`
+- **Reprendre** : `prefect deployment resume 'daily-flight-data-pipeline/daily-flight-pipeline'`
+- **Backfill historique** :
+  ```python
+  from prefect_flows.flight_data_flow import backfill_flight_data_flow
+  backfill_flight_data_flow(
+      start_date="2024-12-01",
+      end_date="2024-12-31",
+      weather_budget=900
+  )
+  ```
+  > Attention aux limites API lors d'un backfill massif.
+- **Redéployer après modifications** :
+  ```bash
+  cd prefect_flows
+  python deploy_flows.py
+  ```
 
-```bash
-prefect deployment pause 'daily-flight-data-pipeline/daily-flight-pipeline'
-```
+## Dépannage
 
-### Resume a Deployment
+### L'agent ne récupère rien
+1. `prefect agent ls`
+2. `prefect work-pool ls`
+3. Redémarrer l'agent (`./scripts/prefect/start_agent.sh`)
 
-```bash
-prefect deployment resume 'daily-flight-data-pipeline/daily-flight-pipeline'
-```
+### `ModuleNotFoundError`
+1. Lancer l'agent depuis la racine du projet
+2. Vérifier `PYTHONPATH`
+3. Activer l'environnement virtuel
 
-### Backfill Historical Data
+### Erreurs 429 (APIs)
+1. Réduire `weather_budget`
+2. Augmenter `retry_delay_seconds`
+3. Espacer les planifications
 
-Use the backfill flow to load historical data:
+### Erreurs PostgreSQL (`psycopg2`)
+1. Vérifier que la base tourne
+2. Contrôler les variables `.prodenv`
+3. S'assurer que l'agent a accès à `config/`
 
-```python
-from prefect_flows.flight_data_flow import backfill_flight_data_flow
+## Bonnes pratiques
 
-# Backfill last 30 days
-backfill_flight_data_flow(
-    start_date="2024-12-01",
-    end_date="2024-12-31",
-    weather_budget=900
-)
-```
+### Cycle de dev
+1. **Tester localement** : `python prefect_flows/flight_data_flow.py`
+2. **Limiter la plage de dates** : `daily_flight_data_flow(target_date="2025-01-15")`
+3. **Surveiller les premiers runs** via l'UI
 
-**Warning:** Be mindful of API rate limits when backfilling!
+### Mise en production
+1. Utiliser Prefect Cloud si besoin de fiabilité
+2. Configurer des notifications d'échec
+3. Contrôler régulièrement le budget API
+4. Revoir les logs chaque semaine
+5. Sauvegarder la base avant gros backfills
 
-### Update a Deployment
+### Passage à l'échelle
+- Multiplier les agents : `prefect agent start -q default --limit 5`
+- Activer l'exécution parallèle (`ConcurrentTaskRunner`)
+- Déployer les agents sur une infra distante
+- Activer les fonctionnalités avancées : cache de tâches, persistance des résultats, blocs personnalisés, webhooks
 
-After modifying a flow:
+## Coûts
 
-```bash
-cd prefect_flows
-python deploy_flows.py  # Re-deploys all flows
-```
+- **Prefect Cloud gratuit** : 20 000 exécutions de tâches/mois
+- **Niveau payant** : 10$/mois pour 100 000 exécutions
+- **Usage actuel estimé** : ~1 110 tâches/mois (dans la limite gratuite)
 
-## Troubleshooting
+## Prochaines étapes
 
-### Agent Not Picking Up Runs
+1. `./scripts/prefect/setup_prefect.sh`
+2. `./scripts/prefect/start_agent.sh`
+3. Ouvrir l'UI (localhost:4200)
+4. Attendre le premier run planifié ou déclencher manuellement
+5. Vérifier les logs pour confirmer le succès
 
-**Symptoms:** Scheduled runs stay in "Scheduled" state
+## Ressources
 
-**Solutions:**
-1. Check agent is running: `prefect agent ls`
-2. Verify work pool: `prefect work-pool ls`
-3. Restart agent: `./scripts/prefect/start_agent.sh`
-
-### Import Errors
-
-**Symptoms:** `ModuleNotFoundError` in flow execution
-
-**Solutions:**
-1. Ensure agent is started from project root
-2. Check `PYTHONPATH` includes project directory
-3. Verify virtual environment is activated
-
-### API Rate Limits
-
-**Symptoms:** HTTP 429 errors from Lufthansa/OpenWeatherMap APIs
-
-**Solutions:**
-1. Reduce `weather_budget` parameter
-2. Increase retry delay in task decorators
-3. Adjust schedule frequency
-
-### Database Connection Errors
-
-**Symptoms:** `psycopg2` connection errors
-
-**Solutions:**
-1. Verify database is running
-2. Check environment variables in `.prodenv`
-3. Ensure agent has access to config files
-
-## Best Practices
-
-### Development Workflow
-
-1. **Test flows locally** before deploying
-   ```bash
-   python prefect_flows/flight_data_flow.py
-   ```
-
-2. **Use small date ranges** for testing
-   ```python
-   daily_flight_data_flow(target_date="2025-01-15")
-   ```
-
-3. **Monitor first few runs** in Prefect UI
-
-### Production Deployment
-
-1. **Use Prefect Cloud** for reliability
-2. **Set up notifications** for failures
-3. **Monitor API budgets** regularly
-4. **Review logs** weekly
-5. **Backup database** before large backfills
-
-### Scaling Up
-
-When you need more:
-
-1. **More workers:** Start multiple agents
-   ```bash
-   prefect agent start -q default --limit 5
-   ```
-
-2. **Parallel execution:** Use `ConcurrentTaskRunner` in flows
-
-3. **Remote execution:** Deploy to cloud infrastructure
-
-4. **Advanced features:**
-   - Task caching
-   - Result persistence
-   - Custom blocks
-   - Webhooks
-
-## Cost Considerations
-
-### Prefect Cloud Pricing
-
-- **Free tier:** 20,000 task runs/month (sufficient for most cases)
-- **Paid tier:** $10/month for 100,000 task runs
-- **Enterprise:** Custom pricing
-
-### Our Usage Estimate
-
-With current schedule:
-- Daily pipeline: ~10 tasks/day × 30 = 300 tasks/month
-- Actuals update: ~5 tasks/day × 5 × 30 = 750 tasks/month
-- Reference sync: ~10 tasks/week × 4 = 40 tasks/month
-- ML training: ~5 tasks/week × 4 = 20 tasks/month
-
-**Total: ~1,110 tasks/month** (well within free tier)
-
-## Next Steps
-
-1. **Run setup:** `./scripts/prefect/setup_prefect.sh`
-2. **Start agent:** `./scripts/prefect/start_agent.sh`
-3. **Monitor UI:** http://localhost:4200
-4. **Wait for first scheduled run** or trigger manually
-5. **Check logs** to verify success
-
-## Additional Resources
-
-- [Prefect Documentation](https://docs.prefect.io)
-- [Prefect Community Slack](https://prefect.io/slack)
-- [Prefect GitHub](https://github.com/PrefectHQ/prefect)
-- [Our Workflow Guide](WORKFLOW_ORCHESTRATION.md)
+- [Documentation Prefect](https://docs.prefect.io)
+- [Slack Prefect](https://prefect.io/slack)
+- [GitHub Prefect](https://github.com/PrefectHQ/prefect)
+- [Guide Workflow](WORKFLOW_ORCHESTRATION.md)
 
 ## Support
 
-If you encounter issues:
-
-1. Check Prefect UI for error details
-2. Review agent logs: `tail -f logs/prefect/agent.log`
-3. Search Prefect docs
-4. Ask in Prefect Community Slack
-5. File an issue in project repository
+1. Inspecter l'UI Prefect pour les détails d'erreur
+2. Consulter `logs/prefect/agent.log`
+3. Rechercher dans la doc Prefect
+4. Demander sur le Slack Prefect
+5. Créer une issue dans ce dépôt

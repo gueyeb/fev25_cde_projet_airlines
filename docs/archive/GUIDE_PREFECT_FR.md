@@ -1,5 +1,7 @@
 # Guide d'Orchestration de Workflows avec Prefect
 
+> **Archivé (2026-01-07) :** La documentation maintenue sur l'orchestration vit désormais dans `PREFECT_GUIDE.md` (FR) et `prefect_flows/README.md`. Ce document est conservé pour mémoire.
+
 ## Vue d'ensemble
 
 Ce projet utilise **Prefect** pour l'orchestration des workflows afin de gérer les pipelines de données et les planifications d'entraînement ML. Prefect fournit :
@@ -328,7 +330,7 @@ Avec la planification actuelle :
 - [Documentation Prefect](https://docs.prefect.io)
 - [Slack Communauté Prefect](https://prefect.io/slack)
 - [GitHub Prefect](https://github.com/PrefectHQ/prefect)
-- [Notre Guide Workflow](ORCHESTRATION_WORKFLOW.md)
+- [Notre Guide Workflow](../WORKFLOW_ORCHESTRATION.md)
 
 ## Support
 

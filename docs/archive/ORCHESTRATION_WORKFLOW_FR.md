@@ -1,5 +1,7 @@
 # Orchestration de Workflows : Airflow vs Prefect
 
+> **Archivé (2026-01-07) :** Consultez `WORKFLOW_ORCHESTRATION.md` pour la version maintenue de cette aide à la décision. Ce fichier n'est plus mis à jour.
+
 ## Résumé Exécutif
 
 Pour la portée actuelle de votre projet (prédiction de retards de vol avec des pipelines ETL simples), **nous recommandons de commencer avec des tâches cron** ou un planificateur léger. Si vous avez besoin d'un véritable outil d'orchestration de workflows, **Prefect** est le meilleur choix par rapport à Airflow pour votre cas d'usage.

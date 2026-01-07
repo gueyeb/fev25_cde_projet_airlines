@@ -121,9 +121,9 @@ Scripts :
 ### 8. Documentation Française 📚
 
 **Nouveaux documents :**
-- `GUIDE_PREFECT.md` : Guide complet Prefect
-- `ORCHESTRATION_WORKFLOW.md` : Comparaison outils orchestration
-- `prefect_flows/README_FR.md` : Documentation flows
+- `PREFECT_GUIDE.md` : Guide complet Prefect (FR)
+- `WORKFLOW_ORCHESTRATION.md` : Comparaison outils orchestration (FR)
+- `prefect_flows/README.md` : Documentation flows
 - `PR_DESCRIPTION_FR.md` : Description PR en français
 - `AMELIORATIONS_SUGGEREES.md` : Roadmap futures améliorations
 
@@ -247,8 +247,8 @@ Voir `AMELIORATIONS_SUGGEREES.md` pour la roadmap complète.
 ## 📞 Support
 
 ### Documentation
-- Guide Prefect : `GUIDE_PREFECT.md`
-- Orchestration : `ORCHESTRATION_WORKFLOW.md`
+- Guide Prefect : `PREFECT_GUIDE.md` + `prefect_flows/README.md`
+- Orchestration : `WORKFLOW_ORCHESTRATION.md`
 - Améliorations : `AMELIORATIONS_SUGGEREES.md`
 
 ### Commandes Utiles
@@ -293,7 +293,7 @@ prefect deployment ls
 - ✅ Tests pytest
 - ✅ Conteneurisation Docker
 - ✅ Backups automatisés
-- ✅ Documentation complète FR/EN
+- ✅ Documentation complète (FR prioritaire)
 - ✅ Prêt pour production
 
 ## 🎉 Prochaines Étapes

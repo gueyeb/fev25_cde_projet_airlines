@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
+      context: ./app
       dockerfile: Dockerfile
     container_name: dst-airlines-backend
     ports:
@@ -17,7 +17,7 @@ services:
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017}
       - MONGO_DB=${MONGO_DB:-dst_airlines}
     volumes:
-      - ./backend:/app
+      - ./app:/app
       - ../src:/app/src
       - ../config:/app/config
     depends_on:

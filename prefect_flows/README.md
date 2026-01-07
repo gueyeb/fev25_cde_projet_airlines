@@ -1,174 +1,123 @@
-# Prefect Flows
+# Flows Prefect
 
-This directory contains all Prefect workflow definitions for the Flight Delay Prediction project.
+Ce répertoire regroupe les definitions de workflows Prefect du projet DST Airlines.
 
-## Quick Start
+## Démarrage rapide
 
 ```bash
-# 1. Set up Prefect
+# 1. Configurer Prefect
 ./scripts/prefect/setup_prefect.sh
 
-# 2. Start the agent
+# 2. Démarrer l'agent
 ./scripts/prefect/start_agent.sh
 ```
 
-## Flow Files
+## Fichiers importants
 
-### Production Flows
+### Flows de production
 
-- **`reference_data_flow.py`** - Weekly sync of reference data (countries, cities, airlines, airports, routes)
-- **`flight_data_flow.py`** - Daily sync of flight schedules + weather enrichment
-- **`update_actuals_flow.py`** - Periodic updates of real-time flight status
-- **`ml_training_flow.py`** - Weekly ML model training
+- **`reference_data_flow.py`** : synchronisation hebdo des référentiels (pays, villes, compagnies, aéroports, avions, routes).
+- **`flight_data_flow.py`** : collecte quotidienne des horaires + météo.
+- **`update_actuals_flow.py`** : mises à jour temps réel toutes les 4h.
+- **`ml_training_flow.py`** : entraînement hebdomadaire des modèles.
 
 ### Configuration
 
-- **`deploy_flows.py`** - Deployment script that registers all flows with schedules
+- **`deploy_flows.py`** : script qui enregistre/déploie tous les flows avec leurs planifications.
 
-## Flow Organization
+## Organisation
 
 ```
 prefect_flows/
-├── reference_data_flow.py    # Weekly: Reference data
-├── flight_data_flow.py        # Daily: Flight schedules + weather
-├── update_actuals_flow.py     # Every 4h: Real-time updates
-├── ml_training_flow.py        # Weekly: Model training
-└── deploy_flows.py            # Deployment configuration
+├── reference_data_flow.py    # Hebdo : données de référence
+├── flight_data_flow.py       # Quotidien : vols + météo
+├── update_actuals_flow.py    # Toutes 4h : retards temps réel
+├── ml_training_flow.py       # Hebdo : entraînement ML
+└── deploy_flows.py           # Déploiement Prefect
 ```
 
-## Running Flows
+## Exécution des flows
 
-### Test Locally (Without Prefect)
+### Tests locaux (sans Prefect)
 
 ```bash
-# Test individual flows
 python reference_data_flow.py
 python flight_data_flow.py
 python update_actuals_flow.py
 python ml_training_flow.py
 ```
 
-### Run via Prefect (With Scheduling)
+### Via Prefect (planifié)
 
 ```bash
-# Deploy all flows
 python deploy_flows.py
-
-# Start agent to execute scheduled runs
 prefect agent start -q default
 
-# Trigger a deployment manually
+# Déclenchement manuel
 prefect deployment run 'daily-flight-data-pipeline/daily-flight-pipeline'
 ```
 
-## Schedule Summary
+## Résumé des planifications
 
-| Flow | Deployment Name | Schedule | Description |
-|------|----------------|----------|-------------|
-| Reference Data | `weekly-reference-sync` | Sat 1:00 AM | Sync countries, cities, airlines, airports, routes |
-| Daily Flight | `daily-flight-pipeline` | Daily 2:00 AM | Sync flight schedules + weather |
-| Update Actuals | `hourly-actuals-update` | Every 4h (6-22) | Update real-time flight status |
-| ML Training | `weekly-ml-training` | Sun 3:00 AM | Train ML models |
+| Flow | Déploiement | Horaire (UTC) | Description |
+|------|-------------|---------------|-------------|
+| Reference Data | `weekly-reference-sync` | Sam 01h00 | Pays, villes, compagnies, aéroports, routes |
+| Daily Flight | `daily-flight-pipeline` | Tous les jours 02h00 | Horaires + météo |
+| Update Actuals | `hourly-actuals-update` | 06h–22h toutes 4h | Statuts temps réel |
+| ML Training | `weekly-ml-training` | Dim 03h00 | Réentraînement modèles |
 
-All times are UTC.
+## Paramètres clés
 
-## Parameters
-
-### daily_flight_data_flow
-
-- `target_date` (str): Date in YYYY-MM-DD format (default: today)
-- `weather_budget` (int): OpenWeatherMap API call budget (default: 900)
-
-### ml_training_flow
-
-- `train_both_models` (bool): Train both classification and regression (default: False)
-
-### reference_data_sync_flow
-
-- `skip_routes` (bool): Skip route creation (default: False)
+- `daily_flight_data_flow` :
+  - `target_date` (str) : date `YYYY-MM-DD`, défaut = aujourd'hui
+  - `weather_budget` (int) : budget d'appels OWM, défaut = 900
+- `ml_training_flow` :
+  - `train_both_models` (bool) : entraîner regression + classification (False par défaut)
+- `reference_data_sync_flow` :
+  - `skip_routes` (bool) : ignorer la génération des routes
 
 ## Monitoring
 
-- **Prefect UI:** http://localhost:4200 (local) or https://app.prefect.cloud
-- **Logs:** `logs/prefect/`
-- **Agent status:** `prefect agent ls`
-- **Deployment status:** `prefect deployment ls`
+- **UI Prefect** : http://localhost:4200 ou https://app.prefect.cloud
+- **Logs** : `logs/prefect/`
+- **Agents** : `prefect agent ls`
+- **Déploiements** : `prefect deployment ls`
 
-## Development
+## Développement
 
-### Adding a New Flow
+### Ajouter un flow
 
-1. Create a new file: `my_new_flow.py`
-2. Define tasks with `@task` decorator
-3. Define flow with `@flow` decorator
-4. Add deployment in `deploy_flows.py`
-5. Re-run deployment script
-
-Example:
+1. Créer `mon_flow.py`.
+2. Définir les tâches avec `@task`.
+3. Définir le flow avec `@flow`.
+4. Ajouter le déploiement dans `deploy_flows.py`.
+5. `python deploy_flows.py`.
 
 ```python
 from prefect import flow, task
 
 @task(retries=2, log_prints=True)
-def my_task():
-    print("[INFO] Running my task")
-    # Your code here
+def ma_tache():
+    print("[INFO] Ma tâche")
 
-@flow(name="my-flow", log_prints=True)
-def my_flow():
-    print("[FLOW START] My Flow")
-    my_task()
-    print("[FLOW COMPLETE]")
+@flow(name="mon-flow", log_prints=True)
+def mon_flow():
+    ma_tache()
 ```
 
-### Modifying Existing Flows
+### Modifier un flow existant
 
-1. Edit the flow file
-2. Test locally: `python <flow_file>.py`
-3. Re-deploy: `python deploy_flows.py`
-4. Restart agent if needed
+1. Éditer le fichier.
+2. Tester : `python <flow>.py`.
+3. Redéployer : `python deploy_flows.py`.
+4. Redémarrer l'agent si besoin.
 
-## Best Practices
+## Dépannage
 
-1. **Always use `log_prints=True`** in decorators for visibility
-2. **Add retries** to tasks that call external APIs
-3. **Set timeouts** for long-running tasks
-4. **Use descriptive names** for tasks and flows
-5. **Document parameters** in docstrings
-6. **Test locally** before deploying
+- **Imports** : ajouter la racine au `PYTHONPATH`.
+- **Connexion DB** : vérifier `config/.prodenv` et charger `source config/.prodenv`.
+- **Limites API** : réduire `weather_budget`, augmenter les délais de retry, espacer la planification.
 
-## Troubleshooting
+## Documentation complète
 
-### Import Errors
-
-Make sure to add project root to path:
-
-```python
-import sys
-from pathlib import Path
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-```
-
-### Database Connection
-
-Ensure environment variables are loaded:
-
-```bash
-# Check if .prodenv exists
-ls -la config/.prodenv
-
-# Load manually if needed
-source config/.prodenv
-```
-
-### API Rate Limits
-
-If hitting rate limits:
-- Increase `retry_delay_seconds` in task decorators
-- Reduce `weather_budget` parameter
-- Adjust schedule frequency
-
-## Full Documentation
-
-See [PREFECT_GUIDE.md](../PREFECT_GUIDE.md) for complete documentation.
+Voir [PREFECT_GUIDE.md](../PREFECT_GUIDE.md) pour les runbooks détaillés.
