@@ -1,10 +1,11 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop, claude/* ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual triggering from GitHub UI
 
 jobs:
   lint-and-test:
@@ -152,3 +153,70 @@ jobs:
       if: steps.check_dockerfile.outputs.dockerfile_exists == 'false'
       run: |
         echo "[INFO] No Dockerfile found. Skipping Docker build."
+
+  deploy:
+    name: Deploy to Production VPS
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build-validation, docker-build]
+    # Only deploy on push to main (not PRs or other branches)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        env:
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh ${VPS_USER}@${VPS_HOST} << 'ENDSSH'
+            set -e
+
+            echo "================================================"
+            echo "🚀 Starting Deployment: DST Airlines"
+            echo "Timestamp: $(date)"
+            echo "================================================"
+
+            # Run centralized deployment script
+            /root/deploy-project.sh dst-airlines --quick
+
+            echo "================================================"
+            echo "✅ Deployment completed successfully!"
+            echo "Timestamp: $(date)"
+            echo "================================================"
+          ENDSSH
+
+      - name: Verify deployment
+        env:
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh ${VPS_USER}@${VPS_HOST} << 'ENDSSH'
+            echo "🔍 Verifying deployment..."
+
+            # Use centralized script to check status
+            /root/deploy-project.sh dst-airlines --status
+
+            echo ""
+            echo "✅ Deployment verification passed!"
+          ENDSSH
+
+      - name: Send deployment notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+            echo "Web App: https://dst-airlines.srv869578.hstgr.cloud"
+            echo "Prefect UI: https://dst-prefect.srv869578.hstgr.cloud"
+            echo "Supabase Studio: https://dst-airlines-studio.srv869578.hstgr.cloud"
+          else
+            echo "❌ Deployment failed! Check logs for details."
+          fi
