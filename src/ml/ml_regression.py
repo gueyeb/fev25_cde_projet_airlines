@@ -27,7 +27,7 @@ def load_data_from_db(engine):
     """
     query = """
     SELECT
-        EXTRACT(EPOCH FROM total_journey_duration) as total_journey_duration,
+        total_journey_duration,
         EXTRACT(EPOCH FROM delay_on_departure) as delay_on_departure,
         EXTRACT(EPOCH FROM delay_on_arrival) as delay_on_arrival,
         EXTRACT(DOW FROM departure_schedule_date) as departure_day_of_week,
@@ -36,8 +36,8 @@ def load_data_from_db(engine):
         arrival_terminal,
         marketing_carrier_airline_id,
         equipment_aircraft_code,
-        departure_airport_meteo,
-        arrival_airport_meteo
+        depart_airport_meteo->>'main' as departure_airport_meteo,
+        arr_airport_meteo->>'main' as arrival_airport_meteo
     FROM lufthansa_flight_history
     WHERE
         delay_on_arrival IS NOT NULL
@@ -45,6 +45,16 @@ def load_data_from_db(engine):
         AND total_journey_duration IS NOT NULL;
     """
     df = pd.read_sql_query(query, engine)
+    # Convert total_journey_duration from 'HH:MM' string to minutes
+    def parse_duration(val):
+        if pd.isna(val) or val == '':
+            return np.nan
+        try:
+            parts = str(val).split(':')
+            return int(parts[0]) * 60 + int(parts[1])
+        except:
+            return np.nan
+    df['total_journey_duration'] = df['total_journey_duration'].apply(parse_duration)
     return df
 
 # --- 2. Prétraitement des données ---

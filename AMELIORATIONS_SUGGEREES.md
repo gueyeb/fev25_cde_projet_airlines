@@ -324,17 +324,19 @@ expectation_suite = context.get_expectation_suite("flight_data")
 1. ✅ Tests unitaires de base
 2. ✅ Dockerfile pour l'application
 3. ✅ Script de sauvegarde PostgreSQL
+4. ✅ Enrichissement données Lufthansa avec retards réels (Janvier 2025)
+5. ✅ Calcul automatique des retards depuis horaires réels vs programmés
 
 ### Priorité Moyenne (Prochaines 2 semaines)
-4. ⚠️ Surveillance avec Prefect notifications
-5. ⚠️ Documentation API
-6. ⚠️ Configuration multi-environnements
+6. ⚠️ Surveillance avec Prefect notifications
+7. ⚠️ Documentation API
+8. ⚠️ Configuration multi-environnements
 
 ### Basse Priorité (Quand nécessaire)
-7. 📊 MLflow pour tracking
-8. 📊 Dashboard Streamlit
-9. 🔍 Great Expectations
-10. 💾 Redis caching
+9. 📊 MLflow pour tracking
+10. 📊 Dashboard Streamlit
+11. 🔍 Great Expectations
+12. 💾 Redis caching
 
 ## 🎯 Impact vs Effort
 

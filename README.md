@@ -293,7 +293,7 @@ Le système entraîne automatiquement deux modèles de prédiction :
 - **Algorithme** : RandomForestClassifier (100 arbres)
 - **Sortie** : Binaire (Oui/Non)
 - **Fichier** : `flight_delay_classification_model.pkl`
-- **Métriques** : Accuracy, Precision, Recall, F1-Score
+- **Métriques** : Accuracy ~77%, Precision, Recall, F1-Score
 
 **Features utilisées** :
 - Durée totale du voyage
@@ -312,7 +312,28 @@ Le système entraîne automatiquement deux modèles de prédiction :
 - **Algorithme** : RandomForestRegressor (100 arbres)
 - **Sortie** : Durée en minutes
 - **Fichier** : `flight_delay_regression_model.pkl`
-- **Métriques** : RMSE (Root Mean Squared Error), R² Score
+- **Métriques** : RMSE ~9 min, R² Score ~0.76
+
+### Sources de données ML
+
+Le ML combine deux sources de données :
+- **Lufthansa Flight History** : Vols enrichis avec retards réels via API FlightStatus
+- **BTS Flight History** : ~400K enregistrements historiques USA avec retards
+
+### Enrichissement des données Lufthansa
+
+L'API Lufthansa FlightStatus ne fournit pas directement le champ `Delay`. Les retards sont **calculés automatiquement** :
+
+```
+delay = horaire_réel - horaire_programmé
+```
+
+**Important** : L'API ne conserve les données FlightStatus que ~7-10 jours. Pour accumuler des données historiques, exécuter quotidiennement :
+
+```bash
+# Enrichir les vols des 7 derniers jours avec retards réels
+python -c "from src.jobs.update_flight_history import update_lufthansa_flight_history; update_lufthansa_flight_history(days=7)"
+```
 
 ### Entraînement manuel des modèles
 
@@ -330,8 +351,8 @@ docker exec dst-airlines-prefect-agent python -m src.ml.ml_regression
 
 ### Prérequis pour l'entraînement
 
-- Au moins 1000 enregistrements dans `lufthansa_flight_history`
-- Données de vols avec retards (delay_on_arrival et delay_on_departure non NULL)
+- Données Lufthansa enrichies avec `actuals_refreshed = true`
+- Ou données BTS dans `bts_flight_history`
 - Données météo enrichies (optionnel mais recommandé)
 
 ### Utilisation des modèles
@@ -706,6 +727,6 @@ Pour toute question ou problème :
 
 ---
 
-**Version** : 2.0
-**Dernière mise à jour** : Novembre 2024
+**Version** : 2.1
+**Dernière mise à jour** : Janvier 2025
 **Technologies** : Python 3.11, Prefect 3, FastAPI, PostgreSQL, Supabase, Docker, scikit-learn

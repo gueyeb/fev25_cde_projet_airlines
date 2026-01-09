@@ -157,6 +157,21 @@ def getFlightsToUpdateToday():
     """
     return pd.read_sql(query, con=engine)
 
+
+def getFlightsToUpdate(days: int = 7):
+    """
+    Retourne les vols des N derniers jours qui n'ont pas encore été rafraîchis.
+    """
+    query = f"""
+    SELECT *
+    FROM lufthansa_flight_history
+    WHERE departure_schedule_date >= CURRENT_DATE - INTERVAL '{days} days'
+      AND departure_schedule_date <= CURRENT_DATE
+      AND actuals_refreshed = false
+    ORDER BY departure_schedule_date DESC
+    """
+    return pd.read_sql(query, con=engine)
+
 def get_route_airports(route_id: int):
     """
     Retourne (departure_airport, arrival_airport) pour une route donnée.

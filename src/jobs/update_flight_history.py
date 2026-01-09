@@ -1,26 +1,41 @@
 import json
+from datetime import datetime, timedelta
 
 from sqlalchemy import text
 
 from src.utils.pg_functions import engine
-from src.utils.pg_functions import getFlightsToUpdateToday, get_route_airports, pd
+from src.utils.pg_functions import getFlightsToUpdateToday, getFlightsToUpdate, get_route_airports, pd
 from src.utils.utils_functions import _safe_get, cached_weather, get_airport_from_postgres_byAirPortCode_cached, fetch_paginated, \
     parse_any, to_bucket_iso
 
 
-def update_lufthansa_flight_history():
+def _calculate_delay(sched_date, sched_time, real_date, real_time):
     """
-    Met à jour UNIQUEMENT les vols du jour dont actuals_refreshed = false :
+    Calcule le retard en secondes entre horaire programmé et réel.
+    Retourne un interval PostgreSQL compatible ou None.
+    """
+    if pd.isna(sched_date) or pd.isna(sched_time) or pd.isna(real_date) or pd.isna(real_time):
+        return None
+    try:
+        sched_dt = datetime.combine(sched_date, sched_time)
+        real_dt = datetime.combine(real_date, real_time)
+        delta = real_dt - sched_dt
+        total_seconds = int(delta.total_seconds())
+        # Format PostgreSQL interval
+        return f"{total_seconds} seconds"
+    except Exception:
+        return None
+
+
+def update_lufthansa_flight_history(days: int = 7):
+    """
+    Met à jour les vols des N derniers jours dont actuals_refreshed = false :
       - récupère horaires réels (Lufthansa flightstatus),
+      - CALCULE les retards (horaire réel - programmé),
       - recalcule la météo aux horaires RÉELS (fallback programmés),
       - UPDATE des colonnes + flag actuals_refreshed=true.
-    Requiert :
-      - getFlightsToUpdateToday()
-      - _safe_get(), split_iso(), parse_any(), to_bucket_iso()
-      - cached_weather(...), get_route_airports(...),
-        get_airport_from_postgres_byAirPortCode_cached(...)
     """
-    df = getFlightsToUpdateToday()
+    df = getFlightsToUpdate(days=days)
     if df.empty:
         print("[INFO] Aucun vol du jour à rafraîchir (déjà à jour ou aucun vol).")
         return
@@ -70,8 +85,10 @@ def update_lufthansa_flight_history():
             dep_terminal = _safe_get(f, "Departure", "Terminal", "Name") or row.get("departure_terminal")
             arr_terminal = _safe_get(f, "Arrival",   "Terminal", "Name") or row.get("arrival_terminal")
 
-            delay_dep = _safe_get(f, "Departure", "TimeStatus", "Delay")
-            delay_arr = _safe_get(f, "Arrival",   "TimeStatus", "Delay")
+            # Calcul des retards depuis horaires réels vs programmés
+            # (l'API ne fournit pas toujours le champ Delay)
+            delay_dep = _calculate_delay(dep_sched_d, dep_sched_t, dep_real_d, dep_real_t)
+            delay_arr = _calculate_delay(arr_sched_d, arr_sched_t, arr_real_d, arr_real_t)
 
             # Aéroports et TZ
             dep_iata, arr_iata = get_route_airports(int(row["route_id"])) if pd.notna(row["route_id"]) else (None, None)
