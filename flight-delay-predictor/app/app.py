@@ -115,8 +115,10 @@ async def startup_event():
 
 def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime) -> pd.DataFrame:
     """
-    Prepare features with weather and historical data enrichment.
-    This function creates a feature set that matches the training data preprocessing.
+    Prepare features matching the training data preprocessing.
+    Features: total_journey_duration, departure_day_of_week, departure_hour,
+              terminals, airline, aircraft, weather
+    Note: delay_on_departure is NOT used (data leakage prevention)
     """
     logger.debug("Preparing features", flight_number=flight_data.flight_number)
 
@@ -137,28 +139,27 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
         arrival_weather=arrival_weather['condition']
     )
 
-    # Create basic features that we can extract from the request
+    # Get route duration from historical data first
+    route_perf = historical_service.get_route_performance(
+        flight_data.departure_airport,
+        flight_data.arrival_airport
+    )
+    # Use historical average, default to 120 min if no data
+    estimated_duration = route_perf.get('avg_duration_minutes', 120) or 120
+
+    # Create features matching training data
+    # Note: delay_on_departure is NOT included (data leakage)
     features_dict = {
-        'total_journey_duration': 0,  # We don't have this information at prediction time
-        'delay_on_departure': 0,  # We don't have this information at prediction time
+        'total_journey_duration': estimated_duration,  # in minutes
         'departure_day_of_week': scheduled_dt.weekday(),
         'departure_hour': scheduled_dt.hour,
-        'departure_terminal': 'unknown',  # Would need to query from database
-        'arrival_terminal': 'unknown',  # Would need to query from database
+        'departure_terminal': 'unknown',
+        'arrival_terminal': 'unknown',
         'marketing_carrier_airline_id': flight_data.airline or 'unknown',
-        'equipment_aircraft_code': 'unknown',  # Would need to query from database
+        'equipment_aircraft_code': 'unknown',
         'departure_airport_meteo': departure_weather['condition'],
         'arrival_airport_meteo': arrival_weather['condition'],
     }
-
-    # Enrich with historical data
-    features_dict = enrich_features_with_history(
-        features_dict,
-        historical_service,
-        flight_data.departure_airport,
-        flight_data.arrival_airport,
-        flight_data.airline
-    )
 
     # Create DataFrame with single row
     df = pd.DataFrame([features_dict])
@@ -176,15 +177,9 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
         'arrival_airport_meteo'
     ]
 
-    # Add categorical columns that might be in historical data
-    if 'departure_congestion_level' in df.columns:
-        categorical_cols.append('departure_congestion_level')
-
     df = pd.get_dummies(df, columns=categorical_cols)
 
-    # Convert durations to minutes
-    df['total_journey_duration'] = df['total_journey_duration'] / 60.0
-    df['delay_on_departure'] = df['delay_on_departure'] / 60.0
+    # total_journey_duration already in minutes, no conversion needed
 
     logger.debug("Features prepared", feature_count=len(df.columns))
 

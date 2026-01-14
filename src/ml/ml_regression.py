@@ -23,12 +23,16 @@ def get_db_engine():
 
 def load_data_from_db(engine):
     """
-    Charge les données nécessaires pour le modèle de machine learning.
+    Load training data with features available at prediction time.
+    Note: delay_on_departure is NOT included (data leakage)
+    total_journey_duration calculated from schedule times.
     """
     query = """
     SELECT
-        total_journey_duration,
-        EXTRACT(EPOCH FROM delay_on_departure) as delay_on_departure,
+        EXTRACT(EPOCH FROM (
+            (arrival_schedule_date + arrival_schedule_time) -
+            (departure_schedule_date + departure_schedule_time)
+        )) / 60.0 as total_journey_duration_min,
         EXTRACT(EPOCH FROM delay_on_arrival) as delay_on_arrival,
         EXTRACT(DOW FROM departure_schedule_date) as departure_day_of_week,
         EXTRACT(HOUR FROM departure_schedule_time) as departure_hour,
@@ -41,32 +45,29 @@ def load_data_from_db(engine):
     FROM lufthansa_flight_history
     WHERE
         delay_on_arrival IS NOT NULL
-        AND delay_on_departure IS NOT NULL
-        AND total_journey_duration IS NOT NULL;
+        AND departure_schedule_date IS NOT NULL
+        AND departure_schedule_time IS NOT NULL
+        AND arrival_schedule_date IS NOT NULL
+        AND arrival_schedule_time IS NOT NULL;
     """
     df = pd.read_sql_query(query, engine)
-    # Convert total_journey_duration from 'HH:MM' string to minutes
-    def parse_duration(val):
-        if pd.isna(val) or val == '':
-            return np.nan
-        try:
-            parts = str(val).split(':')
-            return int(parts[0]) * 60 + int(parts[1])
-        except:
-            return np.nan
-    df['total_journey_duration'] = df['total_journey_duration'].apply(parse_duration)
+    # Rename for consistency
+    df = df.rename(columns={'total_journey_duration_min': 'total_journey_duration'})
     return df
 
 # --- 2. Prétraitement des données ---
 def preprocess_data(df):
     """
-    Convertit les variables catégorielles en variables numériques
-    et gère les valeurs manquantes si nécessaire.
+    Prepare features for regression model.
+    Features: total_journey_duration, departure_day_of_week, departure_hour,
+              terminals, airline, aircraft, weather
+    Target: delay_on_arrival (in minutes)
+    NO data leakage: delay_on_departure is NOT used
     """
-    # Remplacer les valeurs manquantes
+    # Fill missing categorical values
     df = df.fillna('unknown')
 
-    # Encodage one-hot des variables catégorielles
+    # One-hot encode categorical variables
     categorical_cols = [
         'departure_terminal',
         'arrival_terminal',
@@ -77,9 +78,8 @@ def preprocess_data(df):
     ]
     df = pd.get_dummies(df, columns=categorical_cols)
 
-    # Convertir les durées et les retards en minutes
-    df['total_journey_duration'] = df['total_journey_duration'] / 60.0
-    df['delay_on_departure'] = df['delay_on_departure'] / 60.0
+    # Convert target to minutes (from seconds)
+    # total_journey_duration already in minutes from SQL query
     df['delay_on_arrival'] = df['delay_on_arrival'] / 60.0
 
     return df

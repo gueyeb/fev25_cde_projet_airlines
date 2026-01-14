@@ -86,18 +86,26 @@ class HistoricalDataService:
             return cached
 
         try:
+            # Join with routes table to get airport codes
+            # Calculate duration from schedule times (varchar total_journey_duration not reliable)
             query = f"""
                 SELECT
                     COUNT(*) as total_flights,
-                    AVG(EXTRACT(EPOCH FROM delay_on_arrival) / 60.0) as avg_delay_minutes,
-                    STDDEV(EXTRACT(EPOCH FROM delay_on_arrival) / 60.0) as stddev_delay_minutes,
-                    SUM(CASE WHEN delay_on_arrival > interval '15 minutes' THEN 1 ELSE 0 END)::float / COUNT(*) as delay_rate,
-                    AVG(EXTRACT(EPOCH FROM total_journey_duration) / 60.0) as avg_duration_minutes
-                FROM lufthansa_flight_history
-                WHERE departure_airport_iata = '{departure_airport}'
-                  AND arrival_airport_iata = '{arrival_airport}'
-                  AND delay_on_arrival IS NOT NULL
-                  AND departure_schedule_date >= CURRENT_DATE - INTERVAL '90 days'
+                    AVG(EXTRACT(EPOCH FROM f.delay_on_arrival) / 60.0) as avg_delay_minutes,
+                    STDDEV(EXTRACT(EPOCH FROM f.delay_on_arrival) / 60.0) as stddev_delay_minutes,
+                    SUM(CASE WHEN f.delay_on_arrival > interval '15 minutes' THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as delay_rate,
+                    AVG(EXTRACT(EPOCH FROM (
+                        (f.arrival_schedule_date + f.arrival_schedule_time) -
+                        (f.departure_schedule_date + f.departure_schedule_time)
+                    )) / 60.0) as avg_duration_minutes
+                FROM lufthansa_flight_history f
+                JOIN routes r ON f.route_id = r.id
+                WHERE (
+                    (r.departure_airport = '{departure_airport}' AND r.arrival_airport = '{arrival_airport}' AND f.route_sens = 'A')
+                    OR (r.departure_airport = '{arrival_airport}' AND r.arrival_airport = '{departure_airport}' AND f.route_sens = 'R')
+                )
+                  AND f.delay_on_arrival IS NOT NULL
+                  AND f.departure_schedule_date >= CURRENT_DATE - INTERVAL '90 days'
             """
             df = pd.read_sql(query, self.engine)
 
@@ -141,7 +149,7 @@ class HistoricalDataService:
                 SELECT
                     COUNT(*) as total_flights,
                     AVG(EXTRACT(EPOCH FROM delay_on_arrival) / 60.0) as avg_delay_minutes,
-                    SUM(CASE WHEN delay_on_arrival > interval '15 minutes' THEN 1 ELSE 0 END)::float / COUNT(*) as delay_rate
+                    SUM(CASE WHEN delay_on_arrival > interval '15 minutes' THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as delay_rate
                 FROM lufthansa_flight_history
                 WHERE marketing_carrier_airline_id LIKE '{airline_code}%'
                   AND delay_on_arrival IS NOT NULL
@@ -184,15 +192,20 @@ class HistoricalDataService:
             return cached
 
         try:
+            # Join with routes to get airport codes
             query = f"""
                 SELECT
                     COUNT(*) as flight_count,
-                    AVG(EXTRACT(EPOCH FROM delay_on_departure) / 60.0) as avg_departure_delay
-                FROM lufthansa_flight_history
-                WHERE departure_airport_iata = '{airport_code}'
-                  AND EXTRACT(HOUR FROM departure_schedule_time) = {hour}
-                  AND EXTRACT(DOW FROM departure_schedule_date) = {day_of_week}
-                  AND departure_schedule_date >= CURRENT_DATE - INTERVAL '90 days'
+                    AVG(EXTRACT(EPOCH FROM f.delay_on_departure) / 60.0) as avg_departure_delay
+                FROM lufthansa_flight_history f
+                JOIN routes r ON f.route_id = r.id
+                WHERE (
+                    (r.departure_airport = '{airport_code}' AND f.route_sens = 'A')
+                    OR (r.arrival_airport = '{airport_code}' AND f.route_sens = 'R')
+                )
+                  AND EXTRACT(HOUR FROM f.departure_schedule_time) = {hour}
+                  AND EXTRACT(DOW FROM f.departure_schedule_date) = {day_of_week}
+                  AND f.departure_schedule_date >= CURRENT_DATE - INTERVAL '90 days'
             """
             df = pd.read_sql(query, self.engine)
 
