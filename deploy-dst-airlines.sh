@@ -3,28 +3,16 @@
 ###############################################################################
 # DST Airlines Deployment Script
 #
-# This script deploys the DST Airlines application with:
-# - Prefect Server for workflow orchestration
-# - Prefect Agent for executing workflows
-# - FastAPI Web Application for flight delay predictions
-# - Connection to external Supabase database (no local postgres/mongo)
+# Supports two modes:
+#   - Production: VPS with external Supabase (docker-compose.supabase.yml)
+#   - Local: Laptop testing with local PostgreSQL (docker-compose.local.yml)
 #
 # Usage:
 #   ./deploy-dst-airlines.sh [command]
 #
-# Commands:
-#   start       - Start all services
-#   stop        - Stop all services
-#   restart     - Restart all services
-#   logs        - Follow logs from all services
-#   logs-api    - Follow logs from API service only
-#   logs-prefect - Follow logs from Prefect services only
-#   status      - Show status of all services
-#   deploy-flows - Deploy Prefect workflows
-#   health      - Check health of all services
-#   rebuild     - Rebuild and restart all services
-#   clean       - Stop and remove all containers and volumes
-#   help        - Show this help message
+# Production:  start, stop, restart, rebuild, clean, deploy-flows, health
+# Local:       start-local, stop-local, rebuild-local, clean-local
+# Common:      logs, status, help
 ###############################################################################
 
 set -e
@@ -38,7 +26,9 @@ NC='\033[0m' # No Color
 
 # Configuration
 COMPOSE_FILE="docker-compose.supabase.yml"
+COMPOSE_FILE_LOCAL="docker-compose.local.yml"
 PROJECT_NAME="dst-airlines"
+PROJECT_NAME_LOCAL="dst-airlines-local"
 
 # Helper functions
 log_info() {
@@ -201,6 +191,61 @@ clean_services() {
     fi
 }
 
+###############################################################################
+# LOCAL DEVELOPMENT COMMANDS
+###############################################################################
+
+# Start local services
+start_local() {
+    log_info "Starting DST Airlines LOCAL services..."
+    docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL up -d
+    log_success "Local services started!"
+    log_info "Access URLs:"
+    log_info "  - Prefect UI: http://localhost:4201"
+    log_info "  - Web App: http://localhost:8001"
+    log_info "  - PostgreSQL: localhost:5432"
+}
+
+# Stop local services
+stop_local() {
+    log_info "Stopping DST Airlines LOCAL services..."
+    docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL down
+    log_success "Local services stopped!"
+}
+
+# Rebuild local services
+rebuild_local() {
+    log_info "Rebuilding DST Airlines LOCAL services..."
+    docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL up -d --build
+    log_success "Local services rebuilt!"
+}
+
+# Clean local services
+clean_local() {
+    log_warning "This will stop and remove all LOCAL containers and volumes!"
+    read -p "Are you sure? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Cleaning up LOCAL services..."
+        docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL down -v
+        log_success "Local cleanup completed!"
+    else
+        log_info "Cleanup cancelled."
+    fi
+}
+
+# Show local status
+status_local() {
+    log_info "DST Airlines LOCAL services status:"
+    docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL ps
+}
+
+# Show local logs
+logs_local() {
+    log_info "Following LOCAL logs (Ctrl+C to exit)..."
+    docker compose -f $COMPOSE_FILE_LOCAL -p $PROJECT_NAME_LOCAL logs -f
+}
+
 # Show help
 show_help() {
     cat << EOF
@@ -209,37 +254,46 @@ DST Airlines Deployment Script
 Usage:
   ./deploy-dst-airlines.sh [command]
 
-Commands:
+Production Commands (VPS with Supabase):
   start         Start all services
   stop          Stop all services
   restart       Restart all services
+  rebuild       Rebuild and restart all services
+  clean         Stop and remove all containers and volumes
+  deploy-flows  Deploy Prefect workflows
   logs          Follow logs from all services
   logs-api      Follow logs from API service only
   logs-prefect  Follow logs from Prefect services only
   status        Show status of all services
-  deploy-flows  Deploy Prefect workflows
   health        Check health of all services
-  rebuild       Rebuild and restart all services
-  clean         Stop and remove all containers and volumes
+
+Local Development Commands:
+  start-local   Start local services (with local PostgreSQL)
+  stop-local    Stop local services
+  rebuild-local Rebuild local services
+  clean-local   Remove local containers and volumes
+  status-local  Show local services status
+  logs-local    Follow local logs
+
   help          Show this help message
 
 Examples:
-  ./deploy-dst-airlines.sh start
-  ./deploy-dst-airlines.sh logs
-  ./deploy-dst-airlines.sh deploy-flows
-  ./deploy-dst-airlines.sh health
+  ./deploy-dst-airlines.sh start          # Production (VPS)
+  ./deploy-dst-airlines.sh start-local    # Local laptop testing
 
 Environment:
-  Configuration is loaded from config/.env
-  Make sure to set your API keys before starting:
-    - LH_CLIENT_ID (Lufthansa API)
-    - LH_CLIENT_SECRET (Lufthansa API)
-    - OWM_API_KEY (OpenWeatherMap API)
+  config/.env - API keys (LH_CLIENT_ID, LH_CLIENT_SECRET, OWM_API_KEY)
 
-Access URLs:
+  Local mode uses defaults: postgres/localdev on localhost:5432
+  Override with env vars: PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DB
+
+Access URLs (Production):
   - Prefect UI: https://dst-prefect.srv869578.hstgr.cloud
   - Web App: https://dst-airlines.srv869578.hstgr.cloud
-  - Supabase Studio: https://dst-airlines-studio.srv869578.hstgr.cloud
+
+Access URLs (Local):
+  - Prefect UI: http://localhost:4201
+  - Web App: http://localhost:8001
 
 EOF
 }
@@ -286,6 +340,26 @@ main() {
             ;;
         clean)
             clean_services
+            ;;
+        start-local)
+            check_env_file
+            start_local
+            ;;
+        stop-local)
+            stop_local
+            ;;
+        rebuild-local)
+            check_env_file
+            rebuild_local
+            ;;
+        clean-local)
+            clean_local
+            ;;
+        status-local)
+            status_local
+            ;;
+        logs-local)
+            logs_local
             ;;
         help|--help|-h)
             show_help
