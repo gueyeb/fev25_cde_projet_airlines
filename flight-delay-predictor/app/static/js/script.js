@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
       item => item.code
   );
 
+  setupFlightAutocomplete();
+
   
   predictionForm.addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -375,6 +377,83 @@ document.addEventListener('DOMContentLoaded', function() {
     input.addEventListener('change', function() {
         if (!this.value) {
             hiddenInput.value = '';
+        }
+    });
+  }
+
+  function setupFlightAutocomplete() {
+    const input = document.getElementById('flight-number');
+    const resultsContainer = document.getElementById('flight-results');
+    let debounceTimer;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.classList.add('d-none');
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/flights/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                resultsContainer.innerHTML = '';
+                
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'list-group-item list-group-item-action autocomplete-item';
+                        div.innerHTML = `
+                            <div class="d-flex justify-content-between">
+                                <strong>${item.flight_number}</strong>
+                                <small>${item.airline}</small>
+                            </div>
+                            <div class="small text-muted">
+                                ${item.departure_airport} <i class="bi bi-arrow-right"></i> ${item.arrival_airport}
+                            </div>
+                        `;
+                        div.onclick = function() {
+                            // Fill Flight Number
+                            input.value = item.flight_number;
+                            
+                            // Fill Airline
+                            document.getElementById('airline').value = item.airline;
+                            document.getElementById('airline-search').value = `${item.airline} (Auto-filled)`; // Simple indication
+                            
+                            // Fill Departure
+                            document.getElementById('departure-airport').value = item.departure_airport;
+                            document.getElementById('departure-search').value = item.departure_airport; // Use code for now or fetch name
+                            
+                            // Fill Arrival
+                            document.getElementById('arrival-airport').value = item.arrival_airport;
+                            document.getElementById('arrival-search').value = item.arrival_airport;
+                            
+                            resultsContainer.classList.add('d-none');
+                        };
+                        resultsContainer.appendChild(div);
+                    });
+                    resultsContainer.classList.remove('d-none');
+                } else {
+                    const div = document.createElement('div');
+                    div.className = 'list-group-item disabled';
+                    div.textContent = 'No matching flights found';
+                    resultsContainer.appendChild(div);
+                    resultsContainer.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Flight search error:', error);
+            }
+        }, 300);
+    });
+
+    // Close results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.classList.add('d-none');
         }
     });
   }
