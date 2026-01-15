@@ -103,9 +103,25 @@ def create_routes_task():
     print("[SUCCESS] Routes created")
 
 
+@task(
+    name="mark-important-routes",
+    description="Mark routes between major hubs as important for flight sync",
+    retries=1,
+    retry_delay_seconds=10,
+    log_prints=True
+)
+def mark_important_routes_task():
+    """Mark hub routes as important"""
+    from src.jobs.mark_important_routes import mark_important_routes, get_important_routes_stats
+    print("[INFO] Marking important routes between major hubs...")
+    result = mark_important_routes()
+    stats = get_important_routes_stats()
+    print(f"[SUCCESS] {stats['important_routes']} routes marked as important ({stats['percentage']}% of total)")
+
+
 @flow(
     name="reference-data-sync",
-    description="Synchronize all reference data (countries, cities, airlines, airports, aircrafts, routes)",
+    description="Synchronize all reference data (countries, cities, airlines, airports, aircrafts, routes) and mark important routes",
     task_runner=ConcurrentTaskRunner(),
     log_prints=True
 )
@@ -114,11 +130,12 @@ def reference_data_sync_flow(skip_routes: bool = False):
     Main flow to synchronize all reference data.
 
     Args:
-        skip_routes: If True, skip route creation (useful for partial updates)
+        skip_routes: If True, skip route creation and marking (useful for partial updates)
 
     This flow syncs:
     1. Countries, cities, airlines, airports, aircrafts (in parallel where possible)
     2. Routes (depends on airports being synced)
+    3. Mark important routes between major hubs (for flight data sync)
 
     Schedule: Weekly or on-demand
     """
@@ -140,6 +157,8 @@ def reference_data_sync_flow(skip_routes: bool = False):
     if not skip_routes:
         print("[PHASE 3] Creating routes...")
         create_routes_task()
+        print("[PHASE 4] Marking important routes...")
+        mark_important_routes_task()
     else:
         print("[SKIP] Route creation skipped")
 
