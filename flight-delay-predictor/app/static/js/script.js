@@ -8,19 +8,64 @@ document.addEventListener('DOMContentLoaded', function() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('scheduled-date').value = today;
   
-  // Load airports from API
-  loadAirports();
+  // Initialize Flatpickr for time
+  flatpickr("#scheduled-time", {
+      enableTime: true,
+      noCalendar: true,
+      dateFormat: "H:i",
+      time_24hr: true,
+      defaultDate: "12:00"
+  });
+
+  // Setup Autocomplete
+  setupAutocomplete(
+      'airline-search', 
+      'airline', 
+      'airline-results', 
+      '/api/airlines/search', 
+      item => `${item.code} - ${item.name}`,
+      item => item.code
+  );
+
+  setupAutocomplete(
+      'departure-search', 
+      'departure-airport', 
+      'departure-results', 
+      '/api/airports/search', 
+      item => `${item.code} - ${item.name} (${item.city || ''})`,
+      item => item.code
+  );
+
+  setupAutocomplete(
+      'arrival-search', 
+      'arrival-airport', 
+      'arrival-results', 
+      '/api/airports/search', 
+      item => `${item.code} - ${item.name} (${item.city || ''})`,
+      item => item.code
+  );
+
   
   predictionForm.addEventListener('submit', async function(e) {
       e.preventDefault();
       
+      // Validate inputs
+      const airline = document.getElementById('airline').value;
+      const depAirport = document.getElementById('departure-airport').value;
+      const arrAirport = document.getElementById('arrival-airport').value;
+
+      if (!depAirport || !arrAirport) {
+          showErrorMessage('Please select valid airports from the list.');
+          return;
+      }
+
       showLoading(true);
       
       const flightData = {
           flight_number: document.getElementById('flight-number').value,
-          airline: document.getElementById('airline').value,
-          departure_airport: document.getElementById('departure-airport').value,
-          arrival_airport: document.getElementById('arrival-airport').value,
+          airline: airline || null, // Optional
+          departure_airport: depAirport,
+          arrival_airport: arrAirport,
           scheduled_departure: `${document.getElementById('scheduled-date').value}T${document.getElementById('scheduled-time').value}:00`
       };
       
@@ -120,34 +165,6 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
           submitButton.disabled = false;
           submitButton.textContent = 'Predict Delay';
-      }
-  }
-  
-  async function loadAirports() {
-      try {
-          const response = await fetch('/api/airports');
-          if (!response.ok) {
-              throw new Error('Failed to load airports');
-          }
-          
-          const airports = await response.json();
-          const departureSelect = document.getElementById('departure-airport');
-          const arrivalSelect = document.getElementById('arrival-airport');
-          
-          airports.forEach(airport => {
-              const option1 = document.createElement('option');
-              option1.value = airport.code;
-              option1.textContent = `${airport.code} - ${airport.name}`;
-              departureSelect.appendChild(option1);
-              
-              const option2 = document.createElement('option');
-              option2.value = airport.code;
-              option2.textContent = `${airport.code} - ${airport.name}`;
-              arrivalSelect.appendChild(option2);
-          });
-      } catch (error) {
-          console.error('Error loading airports:', error);
-          showErrorMessage('Failed to load airports. Using manual input.');
       }
   }
   
@@ -295,6 +312,71 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch (error) {
           console.error('Error checking model status:', error);
       }
+  }
+
+  // Autocomplete Implementation
+  function setupAutocomplete(inputId, hiddenId, resultsId, endpoint, labelFormatter, valueFormatter) {
+    const input = document.getElementById(inputId);
+    const hiddenInput = document.getElementById(hiddenId);
+    const resultsContainer = document.getElementById(resultsId);
+    let debounceTimer;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.classList.add('d-none');
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                resultsContainer.innerHTML = '';
+                
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'list-group-item list-group-item-action autocomplete-item';
+                        div.textContent = labelFormatter(item);
+                        div.onclick = function() {
+                            input.value = labelFormatter(item);
+                            hiddenInput.value = valueFormatter(item);
+                            resultsContainer.classList.add('d-none');
+                        };
+                        resultsContainer.appendChild(div);
+                    });
+                    resultsContainer.classList.remove('d-none');
+                } else {
+                    const div = document.createElement('div');
+                    div.className = 'list-group-item disabled';
+                    div.textContent = 'No results found';
+                    resultsContainer.appendChild(div);
+                    resultsContainer.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }, 300);
+    });
+
+    // Close results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.classList.add('d-none');
+        }
+    });
+    
+    // Clear hidden value if input is cleared
+    input.addEventListener('change', function() {
+        if (!this.value) {
+            hiddenInput.value = '';
+        }
+    });
   }
 
   // Check model status when page loads

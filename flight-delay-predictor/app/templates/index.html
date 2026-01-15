@@ -7,7 +7,21 @@
     <title>DST Airlines - Flight Delay Predictor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .autocomplete-results {
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1050;
+        }
+        .autocomplete-item {
+            cursor: pointer;
+        }
+        .autocomplete-item:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-5">
@@ -18,39 +32,41 @@
                         <h3 class="text-center mb-0">✈️ Flight Delay Prediction</h3>
                     </div>
                     <div class="card-body">
-                        <form id="prediction-form">
+                        <form id="prediction-form" autocomplete="off">
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label for="flight-number" class="form-label">Flight Number</label>
                                     <input type="text" class="form-control" id="flight-number" placeholder="LH400" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="airline" class="form-label">Airline</label>
-                                    <select class="form-select" id="airline">
-                                        <option value="">Select Airline</option>
-                                        <option value="LH">Lufthansa</option>
-                                        <option value="AF">Air France</option>
-                                        <option value="BA">British Airways</option>
-                                        <option value="DL">Delta Air Lines</option>
-                                    </select>
+                                    <label for="airline-search" class="form-label">Airline</label>
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control" id="airline-search" placeholder="Type to search airline..." autocomplete="off">
+                                        <input type="hidden" id="airline">
+                                        <div id="airline-results" class="list-group position-absolute w-100 shadow autocomplete-results d-none"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <label for="departure-airport" class="form-label">
+                                    <label for="departure-search" class="form-label">
                                         <i class="bi bi-airplane-engines me-1"></i>Departure Airport
                                     </label>
-                                    <select class="form-select" id="departure-airport" required>
-                                        <option value="">Select Departure Airport</option>
-                                    </select>
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control" id="departure-search" placeholder="Type city or code..." autocomplete="off" required>
+                                        <input type="hidden" id="departure-airport">
+                                        <div id="departure-results" class="list-group position-absolute w-100 shadow autocomplete-results d-none"></div>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="arrival-airport" class="form-label">
+                                    <label for="arrival-search" class="form-label">
                                         <i class="bi bi-geo-alt me-1"></i>Arrival Airport
                                     </label>
-                                    <select class="form-select" id="arrival-airport" required>
-                                        <option value="">Select Arrival Airport</option>
-                                    </select>
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control" id="arrival-search" placeholder="Type city or code..." autocomplete="off" required>
+                                        <input type="hidden" id="arrival-airport">
+                                        <div id="arrival-results" class="list-group position-absolute w-100 shadow autocomplete-results d-none"></div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -60,7 +76,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label for="scheduled-time" class="form-label">Time</label>
-                                    <input type="time" class="form-control" id="scheduled-time" required>
+                                    <input type="text" class="form-control" id="scheduled-time" placeholder="Select time..." required>
                                 </div>
                             </div>
                             <div class="d-grid">
@@ -114,6 +130,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="/static/js/script.js"></script>
 </body>
 </html>

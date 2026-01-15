@@ -94,6 +94,11 @@ class AirportInfo(BaseModel):
     country: Optional[str] = None
 
 
+class AirlineInfo(BaseModel):
+    code: str
+    name: str
+
+
 # Load ML model using registry
 @app.on_event("startup")
 async def startup_event():
@@ -234,6 +239,90 @@ async def get_airports():
             AirportInfo(code="CDG", name="Charles de Gaulle Airport", city="PAR", country="FR"),
             AirportInfo(code="FRA", name="Frankfurt Airport", city="FRA", country="DE"),
         ]
+
+
+@app.get("/api/airports/search", response_model=list[AirportInfo])
+async def search_airports(q: str = ""):
+    """Search airports by code or name"""
+    try:
+        # Sanitize query to prevent basic injection (though pandas params is safer, we'll use f-string with care or param dict)
+        search_term = f"%{q.upper()}%"
+        
+        # Using raw SQL with parameters is safer, but pandas read_sql with params is tricky with psycopg2/sqlalchemy sometimes
+        # We will use text() for safety if possible, or just string formatting since this is a read-only internal app for now
+        # Ideally: use SQLAlchemy text() and params
+        
+        query = """
+            SELECT iata_code as code,
+                   name,
+                   city_code as city,
+                   country_code as country
+            FROM airports
+            WHERE location_type = 'Airport'
+              AND iata_code IS NOT NULL
+              AND name IS NOT NULL
+              AND (UPPER(iata_code) LIKE %(search)s OR UPPER(name) LIKE %(search)s OR UPPER(city_code) LIKE %(search)s)
+            ORDER BY 
+                CASE WHEN UPPER(iata_code) = %(exact)s THEN 1 ELSE 2 END,
+                name
+            LIMIT 20
+        """
+        
+        df = pd.read_sql(query, engine, params={"search": search_term, "exact": q.upper()})
+
+        airports = []
+        for _, row in df.iterrows():
+            airports.append(
+                AirportInfo(
+                    code=row["code"],
+                    name=row["name"],
+                    city=row.get("city"),
+                    country=row.get("country"),
+                )
+            )
+
+        return airports
+
+    except Exception as e:
+        logger.error(f"Error searching airports: {e}")
+        return []
+
+
+@app.get("/api/airlines/search", response_model=list[AirlineInfo])
+async def search_airlines(q: str = ""):
+    """Search airlines by code or name"""
+    try:
+        search_term = f"%{q.upper()}%"
+        
+        query = """
+            SELECT airline_code as code,
+                   airline_name as name
+            FROM airlines
+            WHERE airline_code IS NOT NULL
+              AND airline_name IS NOT NULL
+              AND (UPPER(airline_code) LIKE %(search)s OR UPPER(airline_name) LIKE %(search)s)
+            ORDER BY 
+                CASE WHEN UPPER(airline_code) = %(exact)s THEN 1 ELSE 2 END,
+                airline_name
+            LIMIT 20
+        """
+        
+        df = pd.read_sql(query, engine, params={"search": search_term, "exact": q.upper()})
+
+        airlines = []
+        for _, row in df.iterrows():
+            airlines.append(
+                AirlineInfo(
+                    code=row["code"],
+                    name=row["name"]
+                )
+            )
+
+        return airlines
+
+    except Exception as e:
+        logger.error(f"Error searching airlines: {e}")
+        return []
 
 
 @app.post("/api/predict", response_model=FlightPredictionResponse)
