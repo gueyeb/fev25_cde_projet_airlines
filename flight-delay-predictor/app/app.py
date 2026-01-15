@@ -99,6 +99,13 @@ class AirlineInfo(BaseModel):
     name: str
 
 
+class FlightSearchInfo(BaseModel):
+    flight_number: str
+    airline: str
+    departure_airport: str
+    arrival_airport: str
+
+
 # Load ML model using registry
 @app.on_event("startup")
 async def startup_event():
@@ -322,6 +329,57 @@ async def search_airlines(q: str = ""):
 
     except Exception as e:
         logger.error(f"Error searching airlines: {e}")
+        return []
+
+
+@app.get("/api/flights/search", response_model=list[FlightSearchInfo])
+async def search_flights(q: str = ""):
+    """
+    Search flights by flight number.
+    Returns unique Airline/Flight/Route combinations, ordered by how recently they were flown.
+    """
+    try:
+        search_term = f"%{q.upper()}%"
+        
+        # Group by flight/route and order by the most recent scheduled date
+        # This ensures the current active route for a flight number appears first
+        query = """
+            SELECT
+                CONCAT(f.marketing_carrier_airline_id, f.marketing_carrier_flight_number) as flight_full,
+                f.marketing_carrier_airline_id as airline,
+                r.departure_airport,
+                r.arrival_airport,
+                MAX(f.departure_schedule_date) as last_seen
+            FROM lufthansa_flight_history f
+            JOIN routes r ON f.route_id = r.id
+            WHERE CONCAT(f.marketing_carrier_airline_id, f.marketing_carrier_flight_number) LIKE %(search)s
+               OR f.marketing_carrier_flight_number LIKE %(search)s
+            GROUP BY 
+                f.marketing_carrier_airline_id, 
+                f.marketing_carrier_flight_number, 
+                r.departure_airport, 
+                r.arrival_airport
+            ORDER BY last_seen DESC
+            LIMIT 10
+        """
+        
+        df = pd.read_sql(query, engine, params={"search": search_term})
+
+        flights = []
+        for _, row in df.iterrows():
+            flights.append(
+                FlightSearchInfo(
+                    flight_number=row["flight_full"],
+                    airline=row["airline"],
+                    departure_airport=row["departure_airport"],
+                    arrival_airport=row["arrival_airport"]
+                )
+            )
+
+        return flights
+
+    except Exception as e:
+        logger.error(f"Error searching flights: {e}")
         return []
 
 
