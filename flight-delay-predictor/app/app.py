@@ -710,17 +710,17 @@ async def get_routes(limit: int = 100, offset: int = 0):
     try:
         query = f"""
             SELECT
-                r.route_id,
-                r.origin_airport_code,
+                r.id,
+                r.departure_airport,
                 ao.name as origin_airport_name,
-                r.destination_airport_code,
+                r.arrival_airport,
                 ad.name as destination_airport_name,
-                r.distance_km,
-                r.created_at
+                r.distance,
+                r.important
             FROM routes r
-            LEFT JOIN airports ao ON r.origin_airport_code = ao.airport_code
-            LEFT JOIN airports ad ON r.destination_airport_code = ad.airport_code
-            ORDER BY r.route_id
+            LEFT JOIN airports ao ON r.departure_airport = ao.iata_code
+            LEFT JOIN airports ad ON r.arrival_airport = ad.iata_code
+            ORDER BY r.id
             LIMIT {limit} OFFSET {offset}
         """
         df = pd.read_sql(query, engine)

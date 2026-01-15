@@ -89,10 +89,13 @@ flight-delay-predictor/
 
 ## Intégration des modèles ML
 
-1. Entraîner un modèle via `src/ml/`.
-2. Sauvegarder en `.pkl` (joblib).
-3. Copier dans `app/models/flight_delay_model.pkl`.
-4. Redémarrer l'application : le modèle est chargé automatiquement (sinon mode mock).
+1. Entraîner les modèles via `src/ml/` ou le flow Prefect ML.
+2. Les modèles sont sauvegardés automatiquement en `.pkl` dans `app/models/`.
+3. L'app charge automatiquement le dernier modèle modifié au démarrage.
+
+**Fichiers modèles** :
+- `flight_delay_classification_model.pkl` - Prédit si retard (oui/non)
+- `flight_delay_regression_model.pkl` - Prédit durée du retard (minutes)
 
 ## Variables d'environnement
 
