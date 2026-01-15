@@ -1,0 +1,58 @@
+version: '3.8'
+
+# Local development overrides
+# Usage: docker compose -f docker-compose.supabase.yml -f docker-compose.local.yml up -d
+
+services:
+  # Local PostgreSQL (replaces external Supabase)
+  postgres:
+    image: postgres:15
+    container_name: dst-airlines-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    networks:
+      - dst-airlines-network
+
+  prefect-server:
+    environment:
+      PREFECT_UI_API_URL: http://localhost:4201/api
+    networks:
+      - dst-airlines-network
+    labels: []
+
+  prefect-agent:
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_PASSWORD: localdev
+    depends_on:
+      - prefect-server
+      - postgres
+    networks:
+      - dst-airlines-network
+
+  web-app:
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_PASSWORD: localdev
+    depends_on:
+      - postgres
+    networks:
+      - dst-airlines-network
+    labels: []
+
+volumes:
+  postgres_local_data:
+    driver: local
+
+networks:
+  dst-airlines-network:
+    driver: bridge

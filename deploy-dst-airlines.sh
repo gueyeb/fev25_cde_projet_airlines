@@ -171,12 +171,12 @@ check_health() {
         log_warning "Web App is not responding (may still be starting)"
     fi
 
-    # Check Supabase connectivity
+    # Check Supabase connectivity (uses container's env vars)
     if docker exec dst-airlines-prefect-agent \
-        python -c "import psycopg2; conn = psycopg2.connect('postgresql://postgres:d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977@srv869578.hstgr.cloud:5433/postgres'); conn.close(); print('OK')" 2>&1 | grep -q "OK"; then
-        log_success "Supabase database connection is healthy"
+        python -c "import os; import psycopg2; conn = psycopg2.connect(host=os.environ['PG_HOST'], port=os.environ['PG_PORT'], dbname=os.environ['PG_DB'], user=os.environ['PG_USER'], password=os.environ['PG_PASSWORD']); conn.close(); print('OK')" 2>&1 | grep -q "OK"; then
+        log_success "Database connection is healthy"
     else
-        log_error "Cannot connect to Supabase database"
+        log_error "Cannot connect to database"
     fi
 }
 
