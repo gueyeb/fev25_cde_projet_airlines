@@ -73,7 +73,8 @@ fev25_cde_projet_airlines/
 │   ├── docker-compose.yml            # Services Supabase (PostgreSQL, Auth, REST, etc.)
 │   └── .env                          # Configuration Supabase
 │
-├── docker-compose.supabase.yml       # Déploiement production avec Prefect
+├── docker-compose.supabase.yml       # Déploiement production (VPS + Supabase)
+├── docker-compose.local.yml          # Déploiement local (PostgreSQL inclus)
 ├── deploy-dst-airlines.sh            # Script de gestion des services
 ├── init_database.sh                  # Script d'initialisation de la base
 ├── test_flow.sh                      # Script de test interactif des flows
@@ -128,24 +129,54 @@ MONGO_DB=dst_airlines
 
 ### 3. Démarrage des services
 
-Le projet utilise un script de gestion pour simplifier le déploiement :
+Le projet supporte deux modes de déploiement :
+
+#### Mode Production (VPS avec Supabase externe)
 
 ```bash
-# Démarrer tous les services (Supabase + Prefect + Application Web)
+# Démarrer tous les services
 ./deploy-dst-airlines.sh start
 
-# Vérifier le statut des services
+# Vérifier le statut
 ./deploy-dst-airlines.sh status
 
 # Voir les logs
 ./deploy-dst-airlines.sh logs
 
-# Arrêter les services
+# Arrêter / Redémarrer
 ./deploy-dst-airlines.sh stop
-
-# Redémarrer les services
 ./deploy-dst-airlines.sh restart
 ```
+
+#### Mode Local (laptop avec PostgreSQL intégré)
+
+Pour tester sur un laptop sans dépendance externe :
+
+```bash
+# Démarrer les services locaux (inclut PostgreSQL)
+./deploy-dst-airlines.sh start-local
+
+# Autres commandes locales
+./deploy-dst-airlines.sh status-local
+./deploy-dst-airlines.sh logs-local
+./deploy-dst-airlines.sh stop-local
+./deploy-dst-airlines.sh rebuild-local
+./deploy-dst-airlines.sh clean-local
+```
+
+**Configuration DB personnalisée** (optionnel) :
+
+```bash
+# Utiliser un serveur PostgreSQL externe
+export PG_HOST=mon-serveur-postgres.com
+export PG_PORT=5432
+export PG_USER=postgres
+export PG_PASSWORD=mon_mot_de_passe
+export PG_DB=postgres
+./deploy-dst-airlines.sh start-local
+```
+
+Par défaut : `postgres:localdev@localhost:5432/postgres`
 
 ### 4. Initialisation de la base de données
 
@@ -175,8 +206,10 @@ Le projet utilise **Prefect 3** pour orchestrer automatiquement tous les pipelin
 
 ### Accès à l'interface Prefect
 
-- **URL locale** : http://localhost:4201
-- **URL production** : https://dst-prefect.srv869578.hstgr.cloud
+| Mode | URL |
+|------|-----|
+| Local | http://localhost:4201 |
+| Production | https://dst-prefect.srv869578.hstgr.cloud |
 
 ### Flows disponibles
 
@@ -365,8 +398,10 @@ L'application web FastAPI permet de prédire les retards de vols en temps réel.
 
 ### Accès à l'application
 
-- **URL locale** : http://localhost:8001
-- **URL production** : https://dst-airlines.srv869578.hstgr.cloud
+| Mode | URL |
+|------|-----|
+| Local | http://localhost:8001 |
+| Production | https://dst-airlines.srv869578.hstgr.cloud |
 
 ### Endpoints API
 
@@ -631,14 +666,22 @@ curl http://localhost:4201/api/health
 ## 📝 Commandes utiles
 
 ```bash
-# Gestion des services
-./deploy-dst-airlines.sh start        # Démarrer tous les services
-./deploy-dst-airlines.sh stop         # Arrêter tous les services
-./deploy-dst-airlines.sh restart      # Redémarrer tous les services
-./deploy-dst-airlines.sh status       # Vérifier le statut
-./deploy-dst-airlines.sh logs         # Voir tous les logs
-./deploy-dst-airlines.sh logs-prefect # Logs Prefect uniquement
-./deploy-dst-airlines.sh deploy-flows # Déployer les workflows
+# Production (VPS + Supabase)
+./deploy-dst-airlines.sh start        # Démarrer
+./deploy-dst-airlines.sh stop         # Arrêter
+./deploy-dst-airlines.sh restart      # Redémarrer
+./deploy-dst-airlines.sh status       # Statut
+./deploy-dst-airlines.sh logs         # Logs
+./deploy-dst-airlines.sh rebuild      # Rebuild
+./deploy-dst-airlines.sh deploy-flows # Déployer workflows Prefect
+
+# Local (laptop + PostgreSQL intégré)
+./deploy-dst-airlines.sh start-local  # Démarrer en local
+./deploy-dst-airlines.sh stop-local   # Arrêter
+./deploy-dst-airlines.sh status-local # Statut
+./deploy-dst-airlines.sh logs-local   # Logs
+./deploy-dst-airlines.sh rebuild-local # Rebuild
+./deploy-dst-airlines.sh clean-local  # Supprimer volumes
 
 # Test des flows
 ./test_flow.sh                        # Menu interactif
@@ -647,10 +690,9 @@ curl http://localhost:4201/api/health
 ./init_database.sh                    # Créer les tables
 
 # Docker
-docker ps                             # Voir les conteneurs actifs
+docker ps                             # Conteneurs actifs
 docker logs -f <container>            # Suivre les logs
 docker exec -it <container> bash      # Accéder au conteneur
-docker compose -f docker-compose.supabase.yml ps  # Statut Supabase
 ```
 
 ## 👨‍💻 Développement
@@ -727,6 +769,7 @@ Pour toute question ou problème :
 
 ---
 
-**Version** : 2.1
+**Version** : 2.2
 **Dernière mise à jour** : Janvier 2025
 **Technologies** : Python 3.11, Prefect 3, FastAPI, PostgreSQL, Supabase, Docker, scikit-learn
+**Modes de déploiement** : Production (VPS + Supabase) | Local (laptop + PostgreSQL intégré)

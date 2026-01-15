@@ -39,6 +39,20 @@ docker compose up --build
 ```
 Puis ouvrir http://localhost:8000.
 
+### Option 3 : Stack complète (Prefect + API + PostgreSQL)
+
+Depuis la racine du projet :
+
+```bash
+# Local (PostgreSQL intégré)
+./deploy-dst-airlines.sh start-local
+
+# Production (VPS + Supabase)
+./deploy-dst-airlines.sh start
+```
+
+Puis ouvrir http://localhost:8001.
+
 ## Structure
 
 ```
