@@ -215,8 +215,8 @@ Le projet utilise **Prefect 3** pour orchestrer automatiquement tous les pipelin
 
 | Flow | Description | Planification | Fréquence |
 |------|-------------|---------------|-----------|
-| **reference_data_sync_flow** | Synchronisation des données de référence (pays, villes, compagnies, aéroports, avions, routes) | Samedi 1h00 UTC | Hebdomadaire |
-| **daily_flight_data_flow** | Collecte des plannings de vols et données météo | Quotidien 2h00 UTC | Quotidienne |
+| **reference_data_sync_flow** | Synchronisation des données de référence + marquage des routes importantes | Samedi 1h00 UTC | Hebdomadaire |
+| **daily_flight_data_flow** | Collecte des plannings de vols sur les routes importantes | Quotidien 2h00 UTC | Quotidienne |
 | **update_flight_actuals_flow** | Mise à jour des statuts de vols en temps réel | 6h, 10h, 14h, 18h, 22h UTC | 5 fois par jour |
 | **ml_training_flow** | Entraînement des modèles de machine learning | Dimanche 3h00 UTC | Hebdomadaire |
 
@@ -313,6 +313,35 @@ docker logs -f --timestamps dst-airlines-prefect-agent
 
 # Logs du serveur Prefect
 ./deploy-dst-airlines.sh logs-prefect
+```
+
+### Routes importantes
+
+Pour limiter les appels API Lufthansa, seules les routes entre **aéroports majeurs** sont synchronisées quotidiennement. Les routes "importantes" sont marquées automatiquement lors du `reference_data_sync_flow`.
+
+**36 hubs couverts :**
+
+| Région | Aéroports |
+|--------|-----------|
+| Lufthansa Group | FRA, MUC, ZRH, VIE, BRU |
+| Europe | LHR, CDG, AMS, MAD, BCN, FCO, IST, DUB, CPH, OSL, ARN |
+| USA | JFK, LAX, ORD, ATL, DFW, MIA, SFO, BOS, IAD, EWR |
+| Asie | NRT, HND, PEK, PVG, HKG, SIN, ICN, BKK, DXB, DOH |
+
+**Gestion manuelle :**
+
+```bash
+# Voir les statistiques
+python -m src.jobs.mark_important_routes --stats
+
+# Prévisualiser (sans modifier)
+python -m src.jobs.mark_important_routes --dry-run
+
+# Marquer les routes importantes
+python -m src.jobs.mark_important_routes
+
+# Réinitialiser (tout remettre à non-important)
+python -m src.jobs.mark_important_routes --reset
 ```
 
 ## 🤖 Machine Learning - Modèles de prédiction
