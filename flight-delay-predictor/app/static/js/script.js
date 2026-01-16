@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const predictionForm = document.getElementById('prediction-form');
   const resultsCard = document.getElementById('results-card');
   let factorsChart = null;
+  let trendsChart = null;
+  let routeMap = null;
+  let routeLayer = null;
   
   // Set default date to today
   const today = new Date().toISOString().split('T')[0];
@@ -88,6 +91,9 @@ document.addEventListener('DOMContentLoaded', function() {
           displayResults(result);
           resultsCard.classList.remove('d-none');
           
+          // Fetch and display historical trends
+          fetchRouteStats(depAirport, arrAirport);
+          
           // Scroll to results
           resultsCard.scrollIntoView({ behavior: 'smooth' });
           
@@ -137,6 +143,9 @@ document.addEventListener('DOMContentLoaded', function() {
           delayEstimate.textContent = 'On time';
           delayEstimate.className = 'display-4 text-center text-success';
       }
+      
+      // Update Map and Weather
+      updateMapAndWeather(result);
       
       // Display contributing factors
       const factorsList = document.getElementById('factors-list');
@@ -221,6 +230,155 @@ document.addEventListener('DOMContentLoaded', function() {
                           label: function(context) {
                               return context.label + ': ' + context.parsed + '%';
                           }
+                      }
+                  }
+              }
+          }
+      });
+  }
+
+  function updateMapAndWeather(result) {
+      // Update Weather Cards
+      if (result.departure_weather) {
+          document.getElementById('dep-weather-desc').textContent = result.departure_weather.description;
+          document.getElementById('dep-weather-temp').textContent = `${Math.round(result.departure_weather.temperature)}°C`;
+          document.getElementById('dep-weather-icon').textContent = getWeatherIcon(result.departure_weather.condition);
+      }
+      
+      if (result.arrival_weather) {
+          document.getElementById('arr-weather-desc').textContent = result.arrival_weather.description;
+          document.getElementById('arr-weather-temp').textContent = `${Math.round(result.arrival_weather.temperature)}°C`;
+          document.getElementById('arr-weather-icon').textContent = getWeatherIcon(result.arrival_weather.condition);
+      }
+
+      // Initialize Map if needed
+      if (!routeMap) {
+          routeMap = L.map('route-map').setView([48.8566, 2.3522], 4); // Default to Europe center
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '© OpenStreetMap contributors'
+          }).addTo(routeMap);
+      }
+
+      // Update Map Route
+      if (routeLayer) {
+          routeMap.removeLayer(routeLayer);
+      }
+
+      if (result.departure_coords && result.arrival_coords) {
+          const depLatLng = [result.departure_coords.lat, result.departure_coords.lon];
+          const arrLatLng = [result.arrival_coords.lat, result.arrival_coords.lon];
+          
+          const latLngs = [depLatLng, arrLatLng];
+          
+          routeLayer = L.featureGroup([
+              L.marker(depLatLng).bindPopup(`Departure: ${document.getElementById('departure-search').value}`),
+              L.marker(arrLatLng).bindPopup(`Arrival: ${document.getElementById('arrival-search').value}`),
+              L.polyline(latLngs, {color: 'blue', weight: 3, opacity: 0.7, dashArray: '10, 10'})
+          ]).addTo(routeMap);
+          
+          routeMap.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
+      }
+      
+      // Fix map rendering issues when un-hiding parent container
+      setTimeout(() => {
+          routeMap.invalidateSize();
+      }, 300);
+  }
+
+  function getWeatherIcon(condition) {
+      const icons = {
+          'clear': '☀️',
+          'cloudy': '☁️',
+          'rain': '🌧️',
+          'snow': '❄️',
+          'storm': '⚡',
+          'fog': '🌫️',
+          'windy': '💨',
+          'unknown': '❓'
+      };
+      return icons[condition] || '🌤️';
+  }
+
+  async function fetchRouteStats(depAirport, arrAirport) {
+      try {
+          const response = await fetch(`/api/stats/route-delays?departure_airport=${depAirport}&arrival_airport=${arrAirport}`);
+          if (!response.ok) throw new Error('Failed to fetch stats');
+          
+          const data = await response.json();
+          createTrendsChart(data);
+      } catch (error) {
+          console.error('Error fetching route stats:', error);
+          // Hide chart or show empty state
+          document.getElementById('no-trends-data').classList.remove('d-none');
+          if (trendsChart) trendsChart.destroy();
+      }
+  }
+
+  function createTrendsChart(data) {
+      const ctx = document.getElementById('trends-chart').getContext('2d');
+      const noDataMsg = document.getElementById('no-trends-data');
+
+      if (trendsChart) {
+          trendsChart.destroy();
+      }
+
+      if (!data.has_data) {
+          noDataMsg.classList.remove('d-none');
+          return;
+      }
+      
+      noDataMsg.classList.add('d-none');
+
+      trendsChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+              labels: data.labels,
+              datasets: [{
+                  label: 'Avg Delay (min)',
+                  data: data.values,
+                  borderColor: '#dc3545',
+                  backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                  borderWidth: 2,
+                  fill: true,
+                  tension: 0.4,
+                  pointRadius: 3
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                  legend: {
+                      display: false
+                  },
+                  tooltip: {
+                      mode: 'index',
+                      intersect: false,
+                      callbacks: {
+                          footer: function(tooltipItems) {
+                              const index = tooltipItems[0].dataIndex;
+                              const count = data.counts[index];
+                              return `Based on ${count} flights`;
+                          }
+                      }
+                  },
+                  title: {
+                      display: true,
+                      text: `Average Delay by Time of Day (${data.source} Data)`
+                  }
+              },
+              scales: {
+                  y: {
+                      beginAtZero: true,
+                      title: {
+                          display: true,
+                          text: 'Minutes'
+                      }
+                  },
+                  x: {
+                      title: {
+                          display: true,
+                          text: 'Hour of Day'
                       }
                   }
               }

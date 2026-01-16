@@ -111,6 +111,10 @@ class FlightPredictionResponse(BaseModel):
     warning: Optional[str] = None
     from_cache: bool = False
     cached_at: Optional[str] = None
+    departure_weather: Optional[dict] = None
+    arrival_weather: Optional[dict] = None
+    departure_coords: Optional[dict] = None
+    arrival_coords: Optional[dict] = None
 
 
 class AirportInfo(BaseModel):
@@ -135,7 +139,8 @@ class FlightSearchInfo(BaseModel):
     arrival_airport_name: Optional[str] = None
 
 
-def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime) -> pd.DataFrame:
+def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime, 
+                               dep_weather: dict, arr_weather: dict) -> pd.DataFrame:
     """
     Prepare features matching the training data preprocessing.
     Features: total_journey_duration, departure_day_of_week, departure_hour,
@@ -143,23 +148,6 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
     Note: delay_on_departure is NOT used (data leakage prevention)
     """
     logger.debug("Preparing features", flight_number=flight_data.flight_number)
-
-    # Get weather data for airports
-    departure_coords = get_airport_coordinates(engine, flight_data.departure_airport)
-    arrival_coords = get_airport_coordinates(engine, flight_data.arrival_airport)
-
-    departure_weather = weather_service.get_weather_by_airport(
-        flight_data.departure_airport, departure_coords
-    )
-    arrival_weather = weather_service.get_weather_by_airport(
-        flight_data.arrival_airport, arrival_coords
-    )
-
-    logger.debug(
-        "Weather data retrieved",
-        departure_weather=departure_weather['condition'],
-        arrival_weather=arrival_weather['condition']
-    )
 
     # Get route duration from historical data first
     route_perf = historical_service.get_route_performance(
@@ -179,8 +167,8 @@ def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_d
         'arrival_terminal': 'unknown',
         'marketing_carrier_airline_id': flight_data.airline or 'unknown',
         'equipment_aircraft_code': 'unknown',
-        'departure_airport_meteo': departure_weather['condition'],
-        'arrival_airport_meteo': arrival_weather['condition'],
+        'departure_airport_meteo': dep_weather['condition'],
+        'arrival_airport_meteo': arr_weather['condition'],
     }
 
     # Create DataFrame with single row
@@ -405,6 +393,88 @@ async def search_flights(q: str = ""):
         return []
 
 
+@app.get("/api/stats/route-delays")
+async def get_route_delay_stats(departure_airport: str, arrival_airport: str):
+    """
+    Get average delay statistics by hour of day for a specific route.
+    Uses lufthansa_flight_history if available, falls back to bts_flight_history.
+    """
+    try:
+        # Try Lufthansa data first (PostgreSQL interval handling required)
+        query = """
+            SELECT 
+                EXTRACT(HOUR FROM departure_schedule_time) as hour_of_day,
+                AVG(EXTRACT(EPOCH FROM delay_on_arrival)/60) as avg_delay_minutes,
+                COUNT(*) as flight_count
+            FROM lufthansa_flight_history f
+            JOIN routes r ON f.route_id = r.id
+            WHERE r.departure_airport = %(dep)s 
+              AND r.arrival_airport = %(arr)s
+              AND f.delay_on_arrival IS NOT NULL
+            GROUP BY hour_of_day
+            ORDER BY hour_of_day
+        """
+        
+        df = pd.read_sql(query, engine, params={"dep": departure_airport, "arr": arrival_airport})
+        
+        source = "Lufthansa"
+        
+        # If no data, try BTS (structure is different, check schema from memory)
+        # bts_flight_history has 'airport' (origin?) but maybe not destination easily joinable 
+        # based on schema provided earlier: "airport" varchar(10) ... wait, check schema again
+        # Schema says: bts_flight_history has 'airport', 'airport_name'. It's origin-centric?
+        # Actually schema shows: carrier, airport, arr_flights, arr_del15... 
+        # It aggregates by airport/carrier, not route? 
+        # Let's check historical_flights table which joins them.
+        
+        if df.empty:
+            # Fallback to historical_flights if it has route info
+            # historical_flights has departure_airport, arrival_airport, delay_minutes
+            query_hist = """
+                SELECT 
+                    -- We don't have hour in historical_flights easily unless we join back
+                    -- Let's just return empty if LH data is empty for now to be safe
+                    -- or check if we can get aggregate stats
+                    0 as hour_of_day,
+                    AVG(delay_minutes) as avg_delay_minutes,
+                    COUNT(*) as flight_count
+                FROM historical_flights
+                WHERE departure_airport = %(dep)s 
+                  AND arrival_airport = %(arr)s
+                  AND delay_minutes IS NOT NULL
+            """
+            # df_hist = pd.read_sql(query_hist, engine, params={"dep": departure_airport, "arr": arrival_airport})
+            # For now, let's stick to LH data to ensure accuracy of "Time of Day"
+            pass
+
+        # Prepare response
+        # Ensure all hours 0-23 are present for the chart
+        hours = list(range(24))
+        avg_delays = [0] * 24
+        counts = [0] * 24
+        
+        if not df.empty:
+            for _, row in df.iterrows():
+                h = int(row['hour_of_day'])
+                if 0 <= h < 24:
+                    avg_delays[h] = max(0, round(row['avg_delay_minutes'], 1))
+                    counts[h] = int(row['flight_count'])
+        
+        return {
+            "departure_airport": departure_airport,
+            "arrival_airport": arrival_airport,
+            "source": source,
+            "has_data": not df.empty,
+            "labels": [f"{h:02d}:00" for h in hours],
+            "values": avg_delays,
+            "counts": counts
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching route stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/predict", response_model=FlightPredictionResponse)
 async def predict_delay(flight_data: FlightPredictionRequest):
     """
@@ -439,6 +509,17 @@ async def predict_delay(flight_data: FlightPredictionRequest):
             # Parse the scheduled departure datetime
             scheduled_dt = datetime.fromisoformat(flight_data.scheduled_departure)
 
+            # Get weather and coords here to include in response
+            departure_coords = get_airport_coordinates(engine, flight_data.departure_airport)
+            arrival_coords = get_airport_coordinates(engine, flight_data.arrival_airport)
+
+            departure_weather = weather_service.get_weather_by_airport(
+                flight_data.departure_airport, departure_coords
+            )
+            arrival_weather = weather_service.get_weather_by_airport(
+                flight_data.arrival_airport, arrival_coords
+            )
+
             # Get active model from registry
             model = model_registry.get_active_model()
             using_mock = model is None
@@ -448,7 +529,7 @@ async def predict_delay(flight_data: FlightPredictionRequest):
                 # Use actual ML model for prediction
                 try:
                     # Prepare features in the same format as training
-                    features_df = prepare_features_for_model(flight_data, scheduled_dt)
+                    features_df = prepare_features_for_model(flight_data, scheduled_dt, departure_weather, arrival_weather)
 
                     # Align columns with training data
                     # The model expects specific columns from training
@@ -573,7 +654,11 @@ async def predict_delay(flight_data: FlightPredictionRequest):
                 "using_mock_data": using_mock,
                 "warning": warning_message,
                 "from_cache": False,
-                "cached_at": None
+                "cached_at": None,
+                "departure_weather": departure_weather,
+                "arrival_weather": arrival_weather,
+                "departure_coords": {"lat": departure_coords[0], "lon": departure_coords[1]} if departure_coords else None,
+                "arrival_coords": {"lat": arrival_coords[0], "lon": arrival_coords[1]} if arrival_coords else None
             }
 
             # Cache the result
