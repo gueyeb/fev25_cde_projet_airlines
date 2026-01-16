@@ -21,5 +21,8 @@ psycopg2-binary>=2.9.9
 # HTTP requests
 requests>=2.31.0
 
+# Monitoring
+prometheus-fastapi-instrumentator>=6.0.0
+
 # Timezone support
 python-dateutil>=2.8.0

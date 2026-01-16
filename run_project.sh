@@ -38,6 +38,7 @@ DOTENV_PATH=""
 DB_CONTAINER_NAME="postgres_dst"
 FORCE_RECREATE="false"
 BUDGET_HOURLY=1000  # Nombre max de requêtes météo par heure (Open-Meteo)
+RUN_TRAINING="false"
 
 ### --- Parsing des arguments ---------------------------------------------------
 for arg in "$@"; do
@@ -49,8 +50,9 @@ for arg in "$@"; do
     --date=*)           TARGET_DATE="${arg#*=}"; shift ;;
     --dotenv=*)         DOTENV_PATH="${arg#*=}"; shift ;;
     --db-container=*)   DB_CONTAINER_NAME="${arg#*=}"; shift ;;
-    --budget=*)   BUDGET_HOURLY="${arg#*=}"; shift ;;
+    --budget=*)         BUDGET_HOURLY="${arg#*=}"; shift ;;
     --force-recreate)   FORCE_RECREATE="true"; shift ;;
+    --train)            RUN_TRAINING="true"; shift ;;
     --help|-h)          sed -n '1,160p' "$0"; exit 0 ;;
     *) echo "Argument inconnu: $arg"; echo "Utilise --help pour l’aide."; exit 1 ;;
   esac
@@ -249,6 +251,14 @@ else
 fi
 pause_between "$SLEEP_BETWEEN"
 
+### --- 6) Entraînement ML (Optionnel) -----------------------------------------
+if [[ "$RUN_TRAINING" == "true" ]]; then
+    echo "[INFO] Entraînement du modèle ML demandé..."
+    # On exécute le module de classification (qui est le principal)
+    run_py_module "src.ml.ml_classification"
+    pause_between "$SLEEP_BETWEEN"
+fi
+
 echo ""
 echo "[SUCCESS] Pipeline terminé avec succès."
 echo ""
@@ -260,4 +270,7 @@ echo "  - Données météo enrichies"
 echo ""
 echo "[NEXT] Prochaines étapes :"
 echo "  1. Entraîner le modèle ML : python -m src.ml.ml_classification"
-echo "  2. Lancer l'application web : cd flight-delay-predictor/app && python app.py"
+echo "  2. Accéder à l'application : http://localhost:8000"
+echo "  3. Accéder au Monitoring :"
+echo "     - Grafana : http://localhost:3000 (admin/admin)"
+echo "     - Prometheus : http://localhost:9090"

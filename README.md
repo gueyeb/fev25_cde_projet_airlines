@@ -376,13 +376,30 @@ Le système entraîne automatiquement deux modèles de prédiction :
 - **Fichier** : `flight_delay_regression_model.pkl`
 - **Métriques** : RMSE ~9 min, R² Score ~0.76
 
-### Sources de données ML
+## 📈 Monitoring & Observabilité
 
-Le ML combine deux sources de données :
-- **Lufthansa Flight History** : Vols enrichis avec retards réels via API FlightStatus
-- **BTS Flight History** : ~400K enregistrements historiques USA avec retards
+Le projet inclut une stack complète d'observabilité pour surveiller la santé de l'application et de l'infrastructure en temps réel.
 
-### Enrichissement des données Lufthansa
+### Services inclus
+
+| Service | Rôle | Port | URL |
+|---------|------|------|-----|
+| **Grafana** | Visualisation & Dashboards | 3000 | http://localhost:3000 (admin/admin) |
+| **Prometheus** | Collecte de métriques | 9090 | http://localhost:9090 |
+| **Loki** | Agrégation de logs | 3100 | - |
+| **Promtail** | Agent de collecte de logs | - | - |
+| **cAdvisor** | Métriques Docker (CPU/RAM) | 8080 | http://localhost:8080 |
+
+### Dashboards pré-configurés
+
+Un dashboard "DST Airlines Overview" est provisionné automatiquement au démarrage. Il permet de visualiser :
+- **Trafic API** : Requêtes par seconde, codes de statut (200, 500, etc.)
+- **Performance** : Latence moyenne des prédictions
+- **Infrastructure** : Consommation CPU et RAM des conteneurs (Backend, Postgres, Prefect)
+
+## 🌐 Application Web - Flight Delay Predictor
+
+L'application web FastAPI permet de prédire les retards de vols en temps réel.
 
 L'API Lufthansa FlightStatus ne fournit pas directement le champ `Delay`. Les retards sont **calculés automatiquement** :
 
@@ -486,11 +503,12 @@ curl "http://localhost:8001/api/health"
 
 Le projet déploie les services suivants :
 
-1. **Supabase PostgreSQL** : Base de données principale (port 5433)
-2. **Supabase Services** : Auth, REST API, Realtime, Storage, Studio
-3. **Prefect Server** : Serveur d'orchestration (port 4201)
-4. **Prefect Worker** : Exécution des workflows
-5. **FastAPI Web App** : Application de prédiction (port 8001)
+1.  **Supabase PostgreSQL** : Base de données principale (port 5433)
+2.  **Supabase Services** : Auth, REST API, Realtime, Storage, Studio
+3.  **Prefect Server** : Serveur d'orchestration (port 4201)
+4.  **Prefect Worker** : Exécution des workflows
+5.  **FastAPI Web App** : Application de prédiction (port 8001)
+6.  **Monitoring Stack** : Prometheus, Grafana, Loki, Promtail, cAdvisor
 
 ### Base de données PostgreSQL
 

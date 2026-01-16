@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # Add parent directory to path to import from src
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -79,6 +80,9 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(title="DST Airlines Flight Delay Predictor", version="2.0.0", lifespan=lifespan)
+
+# Instrument the app with Prometheus
+Instrumentator().instrument(app).expose(app)
 
 # Add CORS middleware
 app.add_middleware(
