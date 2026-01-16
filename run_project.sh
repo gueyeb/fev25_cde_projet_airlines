@@ -157,7 +157,7 @@ DB_MIGRATIONS_DIR="${PROJECT_DIR}/database/migrations"
 JOBS_DIR="${PROJECT_DIR}/src/jobs"
 
 # Migration SQL (pas de prepare_db.py, on utilise le fichier SQL directement)
-DB_SCHEMA="${DB_MIGRATIONS_DIR}/1_create_tables.sql"
+DB_SCHEMA="database/schema_init.sql"
 
 # Jobs de synchronisation (modules Python à exécuter avec -m)
 SYNC_COUNTRIES="src.jobs.sync_countries"
@@ -198,16 +198,20 @@ esac
 
 ### --- 3) Préparation DB (migrations/DDL) -------------------------------------
 echo "[INFO] Préparation de la base (création des tables via SQL)..."
-echo "[INFO] Schéma SQL: ${DB_SCHEMA}"
-echo "[WARNING] IMPORTANT: Assurez-vous d'avoir exécuté le schéma SQL manuellement :"
-echo "   psql -h \$PG_HOST -p \$PG_PORT -U \$PG_USER -d \$PG_DB -f ${DB_SCHEMA}"
-echo "   ou via un client PostgreSQL (DBeaver, pgAdmin, etc.)"
-echo ""
-read -p "Les tables sont-elles créées ? (y/n) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    die "Veuillez créer les tables avant de continuer."
+
+if [[ "$ENV_MODE" == "host" ]]; then
+    echo "[INFO] Exécution du script d'initialisation via Docker..."
+    # Configurer les variables pour le script init
+    export DB_CONTAINER="$DB_CONTAINER_NAME"
+    # Exécuter le script
+    ./scripts/utils/init_database.sh
+else
+    echo "[INFO] Mode PROD : On suppose que la base est déjà initialisée."
+    echo "[INFO] Si ce n'est pas le cas, exécutez database/schema_init.sql manuellement."
+    echo "   psql -h \$PG_HOST -p \$PG_PORT -U \$PG_USER -d \$PG_DB -f database/schema_init.sql"
+    sleep 5
 fi
+
 pause_between 2
 
 ### --- 4) Chargement des données de référence ---------------------------------

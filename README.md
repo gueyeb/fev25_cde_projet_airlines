@@ -59,24 +59,31 @@ fev25_cde_projet_airlines/
 │   │   ├── app.py                    # Point d'entrée FastAPI
 │   │   ├── requirements.txt          # Dépendances de l'application
 │   │   ├── models/                   # Modèles ML (PKL)
-│   │   │   ├── flight_delay_classification_model.pkl
-│   │   │   └── flight_delay_regression_model.pkl
 │   │   ├── utils/                    # Utilitaires backend
 │   │   ├── templates/
-│   │   │   └── index.html            # Interface utilisateur
 │   │   └── static/
-│   │       ├── css/styles.css
-│   │       └── js/script.js
 │   └── Dockerfile                    # Image Docker de l'application
 │
-├── supabase/                         # Instance Supabase auto-hébergée
-│   ├── docker-compose.yml            # Services Supabase (PostgreSQL, Auth, REST, etc.)
-│   └── .env                          # Configuration Supabase
+├── monitoring/                       # Configuration Observabilité
+│   ├── prometheus/
+│   ├── grafana/
+│   ├── loki/
+│   └── promtail/
 │
-├── docker-compose.supabase.yml       # Déploiement production (VPS + Supabase)
-├── docker-compose.local.yml          # Déploiement local (PostgreSQL inclus)
-├── deploy-dst-airlines.sh            # Script de gestion des services
-├── init_database.sh                  # Script d'initialisation de la base
+├── scripts/                          # Scripts utilitaires
+│   ├── utils/
+│   │   ├── init_database.sh          # Script d'initialisation de la base
+│   │   └── check_counts.py           # Vérification des volumes de données
+│   └── orchestration/                # Scripts de maintenance Prefect
+│
+├── docs/                             # Documentation du projet
+│   ├── PREFECT_GUIDE.md
+│   └── WORKFLOW_ORCHESTRATION.md
+│
+├── archive/                          # Anciens scripts de déploiement
+│
+├── docker-compose.yml                # Définition de l'infrastructure complète
+├── run_project.sh                    # Script principal de lancement
 ├── test_flow.sh                      # Script de test interactif des flows
 ├── requirements.txt                  # Dépendances Python globales
 └── README.md                         # Ce fichier
@@ -182,7 +189,7 @@ Par défaut : `postgres:localdev@localhost:5432/postgres`
 
 ```bash
 # Exécuter le script d'initialisation
-./init_database.sh
+./scripts/utils/init_database.sh
 ```
 
 Ce script crée automatiquement :
@@ -734,7 +741,7 @@ curl http://localhost:4201/api/health
 ./test_flow.sh                        # Menu interactif
 
 # Initialisation
-./init_database.sh                    # Créer les tables
+./scripts/utils/init_database.sh      # Créer les tables
 
 # Docker
 docker ps                             # Conteneurs actifs

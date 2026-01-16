@@ -120,4 +120,4 @@ def mon_flow():
 
 ## Documentation complète
 
-Voir [PREFECT_GUIDE.md](../PREFECT_GUIDE.md) pour les runbooks détaillés.
+Voir [PREFECT_GUIDE.md](../docs/PREFECT_GUIDE.md) pour les runbooks détaillés.

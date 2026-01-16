@@ -62,6 +62,35 @@ services:
       timeout: 5s
       retries: 5
 
+  prefect-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dst-airlines-prefect-agent
+    restart: unless-stopped
+    command: prefect worker start --pool default
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PYTHONPATH: /app
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: dst_airlines
+      PG_USER: dst_user
+      PG_PASSWORD: dst_password
+    volumes:
+      - ./logs:/app/logs
+      - ./prefect_flows:/app/prefect_flows
+      - ./src:/app/src
+      - ./database:/app/database
+      - ./config:/app/config
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - dst_net
+
   backend:
     build:
       context: ./flight-delay-predictor/app
