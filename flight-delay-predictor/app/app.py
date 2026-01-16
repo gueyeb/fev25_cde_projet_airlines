@@ -42,8 +42,43 @@ setup_logging(log_level=os.getenv('LOG_LEVEL', 'INFO'), use_json=False)
 logger = get_logger(__name__)
 metrics = get_metrics_collector()
 
+# Define APP_DIR early
+APP_DIR = Path(__file__).parent
+
+# Initialize services
+weather_service = get_weather_service()
+historical_service = HistoricalDataService(engine)
+model_registry = get_model_registry(APP_DIR / "models")
+prediction_cache = get_prediction_cache(ttl_minutes=int(os.getenv('PREDICTION_CACHE_TTL', '30')))
+
+logger.info("Application starting", version="2.0.0")
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize application services on startup"""
+    logger.info("Loading models from registry")
+
+    # Try to auto-load the latest model
+    if model_registry.auto_load_latest():
+        active_model = model_registry.get_active_model()
+        active_meta = model_registry.get_active_metadata()
+        logger.info(
+            "Model loaded successfully",
+            version=model_registry.active_version,
+            model_type=active_meta.model_type if active_meta else "unknown"
+        )
+    else:
+        logger.warning("No model found in registry, predictions will use simulated data")
+    
+    yield
+    # Clean up resources if needed
+    logger.info("Application shutting down")
+
+
 # Initialize FastAPI app
-app = FastAPI(title="DST Airlines Flight Delay Predictor", version="2.0.0")
+app = FastAPI(title="DST Airlines Flight Delay Predictor", version="2.0.0", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
@@ -55,16 +90,7 @@ app.add_middleware(
 )
 
 # Mount static files
-APP_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
-
-# Initialize services
-weather_service = get_weather_service()
-historical_service = HistoricalDataService(engine)
-model_registry = get_model_registry(APP_DIR / "models")
-prediction_cache = get_prediction_cache(ttl_minutes=int(os.getenv('PREDICTION_CACHE_TTL', '30')))
-
-logger.info("Application starting", version="2.0.0")
 
 
 # Pydantic models for request/response
@@ -102,27 +128,11 @@ class AirlineInfo(BaseModel):
 class FlightSearchInfo(BaseModel):
     flight_number: str
     airline: str
+    airline_name: Optional[str] = None
     departure_airport: str
+    departure_airport_name: Optional[str] = None
     arrival_airport: str
-
-
-# Load ML model using registry
-@app.on_event("startup")
-async def startup_event():
-    """Initialize model registry on startup"""
-    logger.info("Loading models from registry")
-
-    # Try to auto-load the latest model
-    if model_registry.auto_load_latest():
-        active_model = model_registry.get_active_model()
-        active_meta = model_registry.get_active_metadata()
-        logger.info(
-            "Model loaded successfully",
-            version=model_registry.active_version,
-            model_type=active_meta.model_type if active_meta else "unknown"
-        )
-    else:
-        logger.warning("No model found in registry, predictions will use simulated data")
+    arrival_airport_name: Optional[str] = None
 
 
 def prepare_features_for_model(flight_data: FlightPredictionRequest, scheduled_dt: datetime) -> pd.DataFrame:
@@ -347,18 +357,27 @@ async def search_flights(q: str = ""):
             SELECT
                 CONCAT(f.marketing_carrier_airline_id, f.marketing_carrier_flight_number) as flight_full,
                 f.marketing_carrier_airline_id as airline,
+                a.airline_name,
                 r.departure_airport,
+                ap1.name as departure_airport_name,
                 r.arrival_airport,
+                ap2.name as arrival_airport_name,
                 MAX(f.departure_schedule_date) as last_seen
             FROM lufthansa_flight_history f
             JOIN routes r ON f.route_id = r.id
+            LEFT JOIN airlines a ON f.marketing_carrier_airline_id = a.airline_code
+            LEFT JOIN airports ap1 ON r.departure_airport = ap1.iata_code
+            LEFT JOIN airports ap2 ON r.arrival_airport = ap2.iata_code
             WHERE CONCAT(f.marketing_carrier_airline_id, f.marketing_carrier_flight_number) LIKE %(search)s
                OR f.marketing_carrier_flight_number LIKE %(search)s
             GROUP BY 
                 f.marketing_carrier_airline_id, 
                 f.marketing_carrier_flight_number, 
+                a.airline_name,
                 r.departure_airport, 
-                r.arrival_airport
+                ap1.name,
+                r.arrival_airport,
+                ap2.name
             ORDER BY last_seen DESC
             LIMIT 10
         """
@@ -371,8 +390,11 @@ async def search_flights(q: str = ""):
                 FlightSearchInfo(
                     flight_number=row["flight_full"],
                     airline=row["airline"],
+                    airline_name=row["airline_name"],
                     departure_airport=row["departure_airport"],
-                    arrival_airport=row["arrival_airport"]
+                    departure_airport_name=row["departure_airport_name"],
+                    arrival_airport=row["arrival_airport"],
+                    arrival_airport_name=row["arrival_airport_name"]
                 )
             )
 

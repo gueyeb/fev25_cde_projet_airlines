@@ -422,15 +422,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             // Fill Airline
                             document.getElementById('airline').value = item.airline;
-                            document.getElementById('airline-search').value = `${item.airline} (Auto-filled)`; // Simple indication
+                            const airlineDisplay = item.airline_name ? `${item.airline} - ${item.airline_name}` : item.airline;
+                            document.getElementById('airline-search').value = `${airlineDisplay} (Auto-filled)`;
                             
                             // Fill Departure
                             document.getElementById('departure-airport').value = item.departure_airport;
-                            document.getElementById('departure-search').value = item.departure_airport; // Use code for now or fetch name
+                            const depDisplay = item.departure_airport_name ? `${item.departure_airport} - ${item.departure_airport_name}` : item.departure_airport;
+                            document.getElementById('departure-search').value = depDisplay;
                             
                             // Fill Arrival
                             document.getElementById('arrival-airport').value = item.arrival_airport;
-                            document.getElementById('arrival-search').value = item.arrival_airport;
+                            const arrDisplay = item.arrival_airport_name ? `${item.arrival_airport} - ${item.arrival_airport_name}` : item.arrival_airport;
+                            document.getElementById('arrival-search').value = arrDisplay;
                             
                             resultsContainer.classList.add('d-none');
                         };
