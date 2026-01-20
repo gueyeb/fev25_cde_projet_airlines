@@ -5,7 +5,7 @@ Routes between major hubs are flagged as important for daily flight data sync.
 This limits API calls while covering high-value routes.
 """
 
-from config.env_loader import engine
+from src.utils.pg_functions import engine
 from sqlalchemy import text
 
 # Major hub airports by region
