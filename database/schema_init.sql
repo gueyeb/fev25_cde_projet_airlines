@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS public.routes (
     foreign key (arrival_airport) references public.airports (iata_code)
         match simple on update no action on delete no action,
     foreign key (departure_airport) references public.airports (iata_code)
-        match simple on update no action on delete no action
+        match simple on update no action on delete no action,
+    -- Unique constraint to prevent duplicate routes (required for ON CONFLICT DO NOTHING)
+    constraint routes_departure_arrival_unique unique (departure_airport, arrival_airport)
 );
 
 -- Create indexes for routes
