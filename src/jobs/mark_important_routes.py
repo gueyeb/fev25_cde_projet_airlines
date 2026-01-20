@@ -16,11 +16,23 @@ HUBS = {
     # Other major European hubs
     "europe": ["LHR", "CDG", "AMS", "MAD", "BCN", "FCO", "IST", "DUB", "CPH", "OSL", "ARN"],
 
+    # European secondary hubs
+    "europe_secondary": ["ATH", "BUD", "GVA", "DUS"],
+
     # Major US hubs (transatlantic routes)
     "usa": ["JFK", "LAX", "ORD", "ATL", "DFW", "MIA", "SFO", "BOS", "IAD", "EWR"],
 
     # Major Asian hubs (long-haul routes)
     "asia": ["NRT", "HND", "PEK", "PVG", "HKG", "SIN", "ICN", "BKK", "DXB", "DOH"],
+
+    # Asian/Middle East secondary hubs
+    "asia_secondary": ["DEL", "BOM", "AUH", "CAI"],
+
+    # Americas secondary hubs (South America)
+    "americas_secondary": ["GRU", "EZE", "BOG"],
+
+    # Africa/Oceania hubs
+    "africa_oceania": ["ADD", "AKL"],
 }
 
 

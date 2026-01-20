@@ -26,10 +26,10 @@ The Studio provides a web interface for:
 
 ## Database Connection
 
-### Direct PostgreSQL Connection
+### Direct PostgreSQL Connection (Recommended for external tools)
 ```
 Host: srv869578.hstgr.cloud
-Port: 5433
+Port: 5435
 Database: postgres
 User: postgres
 Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
@@ -37,18 +37,19 @@ Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
 
 **Connection String**:
 ```
-postgresql://postgres:d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977@srv869578.hstgr.cloud:5433/postgres
+postgresql://postgres:d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977@srv869578.hstgr.cloud:5435/postgres
 ```
 
-### Pooled Connection (via Supavisor)
-For better connection management in production:
+### Pooled Connection (via Supavisor) - Internal use only
+For internal services within Docker network:
 ```
 Host: srv869578.hstgr.cloud
-Port: 6544
-Database: postgres
-User: postgres
+Port: 5433 (session mode) or 6544 (transaction mode)
+User: postgres.dst-airlines-tenant
 Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
 ```
+
+**Note**: Pooled connections require the tenant ID suffix in the username.
 
 ## API Keys
 
@@ -74,7 +75,7 @@ import psycopg2
 
 conn = psycopg2.connect(
     host="srv869578.hstgr.cloud",
-    port=5433,
+    port=5435,
     database="postgres",
     user="postgres",
     password="d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977"
@@ -100,7 +101,7 @@ Update your `/srv/fev25_cde_projet_airlines/config/.env` file:
 ```bash
 # PostgreSQL (Supabase)
 PG_HOST=srv869578.hstgr.cloud
-PG_PORT=5433
+PG_PORT=5435
 PG_DB=postgres
 PG_USER=postgres
 PG_PASSWORD=d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
@@ -118,7 +119,7 @@ To migrate your existing database schema to Supabase:
 cd /srv/fev25_cde_projet_airlines
 
 # Execute the migration SQL
-psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres -f database/migrations/1_create_tables.sql
+psql -h srv869578.hstgr.cloud -p 5435 -U postgres -d postgres -f database/migrations/1_create_tables.sql
 ```
 
 ## Managing the Supabase Instance
@@ -212,10 +213,10 @@ Use Supabase Studio to:
 ### Manual Backup
 ```bash
 # Create backup
-pg_dump -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres > backup_$(date +%Y%m%d).sql
+pg_dump -h srv869578.hstgr.cloud -p 5435 -U postgres -d postgres > backup_$(date +%Y%m%d).sql
 
 # Restore from backup
-psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres < backup_20251123.sql
+psql -h srv869578.hstgr.cloud -p 5435 -U postgres -d postgres < backup_20251123.sql
 ```
 
 ### Automated Backups
@@ -233,7 +234,7 @@ crontab -e
 ### Connection Issues
 ```bash
 # Test database connection
-psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres -c "SELECT version();"
+psql -h srv869578.hstgr.cloud -p 5435 -U postgres -d postgres -c "SELECT version();"
 
 # Check if services are running
 docker ps --filter "name=dst-airlines-supabase"
