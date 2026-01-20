@@ -205,6 +205,15 @@ jobs:
             # Use centralized script to check status
             /root/deploy-project.sh dst-airlines --status
 
+            # Wait for Prefect agent to initialize flows
+            echo ""
+            echo "🔄 Waiting for Prefect flows to initialize..."
+            sleep 15
+
+            # Verify Prefect flows are deployed
+            echo "📋 Checking Prefect deployments..."
+            docker exec dst-airlines-prefect-agent prefect deployment ls || echo "Warning: Could not list deployments"
+
             echo ""
             echo "✅ Deployment verification passed!"
           ENDSSH
@@ -214,9 +223,17 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deployment successful!"
-            echo "Web App: https://dst-airlines.srv869578.hstgr.cloud"
-            echo "Prefect UI: https://dst-prefect.srv869578.hstgr.cloud"
-            echo "Supabase Studio: https://dst-airlines-studio.srv869578.hstgr.cloud"
+            echo ""
+            echo "📍 Service URLs:"
+            echo "  Web App (FastAPI):    https://dst-airlines.srv869578.hstgr.cloud"
+            echo "  Prefect Dashboard:    https://dst-prefect.srv869578.hstgr.cloud"
+            echo "  Grafana (Monitoring): https://dst-grafana.srv869578.hstgr.cloud"
+            echo "  Supabase Studio:      https://dst-airlines-studio.srv869578.hstgr.cloud"
+            echo "  Supabase API:         https://dst-airlines-api.srv869578.hstgr.cloud"
+            echo ""
+            echo "🔍 Health Checks:"
+            echo "  Web App:    https://dst-airlines.srv869578.hstgr.cloud/api/health"
+            echo "  Prefect:    https://dst-prefect.srv869578.hstgr.cloud/api/health"
           else
             echo "❌ Deployment failed! Check logs for details."
           fi

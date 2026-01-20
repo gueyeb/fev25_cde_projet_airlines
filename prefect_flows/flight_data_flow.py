@@ -5,6 +5,7 @@ Schedule: Daily (for new schedules)
 """
 from prefect import flow, task
 from datetime import date, timedelta
+from typing import Optional
 import sys
 from pathlib import Path
 
@@ -20,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
     retry_delay_seconds=60,
     log_prints=True
 )
-def sync_flight_history_task(target_date: str = None):
+def sync_flight_history_task(target_date: Optional[str] = None):
     """
     Sync flight schedules for a specific date.
 
@@ -44,7 +45,7 @@ def sync_flight_history_task(target_date: str = None):
     retry_delay_seconds=120,
     log_prints=True
 )
-def enrich_weather_task(target_date: str = None, budget: int = 900):
+def enrich_weather_task(target_date: Optional[str] = None, budget: int = 900):
     """
     Enrich flight data with weather information.
 
@@ -52,13 +53,13 @@ def enrich_weather_task(target_date: str = None, budget: int = 900):
         target_date: Date in YYYY-MM-DD format. If None, uses today.
         budget: Daily API call budget for OpenWeatherMap
     """
-    from src.jobs.enrich_weather import enrich_weather_for_flights
+    from src.jobs.enrich_weather_programmed import enrich_weather_for_date
 
     if target_date is None:
         target_date = date.today().isoformat()
 
     print(f"[INFO] Enriching weather data for {target_date} (budget: {budget})...")
-    enrich_weather_for_flights(target_date=target_date, daily_budget=budget)
+    enrich_weather_for_date(target_date_str=target_date, daily_budget=budget)
     print(f"[SUCCESS] Weather data enriched for {target_date}")
 
 
@@ -67,7 +68,7 @@ def enrich_weather_task(target_date: str = None, budget: int = 900):
     description="Daily pipeline to sync flight schedules and enrich with weather data",
     log_prints=True
 )
-def daily_flight_data_flow(target_date: str = None, weather_budget: int = 900):
+def daily_flight_data_flow(target_date: Optional[str] = None, weather_budget: int = 900):
     """
     Daily flow to sync flight schedules and enrich with weather.
 

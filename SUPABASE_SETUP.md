@@ -1,0 +1,270 @@
+# DST Airlines - Supabase Setup Guide
+
+## Overview
+
+A self-hosted Supabase instance has been set up for the DST Airlines project, providing PostgreSQL database with additional features like REST API, real-time subscriptions, and storage.
+
+## Access Information
+
+### Supabase Studio (Web Interface)
+- **URL**: https://dst-airlines-studio.srv869578.hstgr.cloud
+- **Username**: `supabase`
+- **Password**: `DSTAirlines2025!Secure`
+
+The Studio provides a web interface for:
+- Database management (tables, views, functions)
+- SQL editor
+- API documentation
+- Real-time logs
+- Storage file browser
+
+### API Endpoints
+- **REST API**: https://dst-airlines-api.srv869578.hstgr.cloud/rest/v1
+- **Auth API**: https://dst-airlines-api.srv869578.hstgr.cloud/auth/v1
+- **Storage API**: https://dst-airlines-api.srv869578.hstgr.cloud/storage/v1
+- **Realtime**: wss://dst-airlines-api.srv869578.hstgr.cloud/realtime/v1
+
+## Database Connection
+
+### Direct PostgreSQL Connection
+```
+Host: srv869578.hstgr.cloud
+Port: 5433
+Database: postgres
+User: postgres
+Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+```
+
+**Connection String**:
+```
+postgresql://postgres:d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977@srv869578.hstgr.cloud:5433/postgres
+```
+
+### Pooled Connection (via Supavisor)
+For better connection management in production:
+```
+Host: srv869578.hstgr.cloud
+Port: 6544
+Database: postgres
+User: postgres
+Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+```
+
+## API Keys
+
+### Anonymous Key (Public)
+For client-side applications:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II
+```
+
+### Service Role Key (Secret)
+For server-side applications (has admin privileges):
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NjM4OTIxMjQsImV4cCI6MzM0MDY5MjEyNH0.JbNwGfUsSbLEAeaZGWwULsk3lK2pCZyO3vA056AXQTo
+```
+
+**⚠️ Warning**: Never expose the Service Role Key in client-side code!
+
+## Connecting from Your Application
+
+### Python (using psycopg2)
+```python
+import psycopg2
+
+conn = psycopg2.connect(
+    host="srv869578.hstgr.cloud",
+    port=5433,
+    database="postgres",
+    user="postgres",
+    password="d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977"
+)
+```
+
+### Python (using Supabase Client)
+```python
+from supabase import create_client, Client
+
+url = "https://dst-airlines-api.srv869578.hstgr.cloud"
+key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II"
+supabase: Client = create_client(url, key)
+
+# Query data
+response = supabase.table('your_table').select('*').execute()
+```
+
+### Update Existing Project Configuration
+
+Update your `/srv/fev25_cde_projet_airlines/config/.env` file:
+
+```bash
+# PostgreSQL (Supabase)
+PG_HOST=srv869578.hstgr.cloud
+PG_PORT=5433
+PG_DB=postgres
+PG_USER=postgres
+PG_PASSWORD=d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+
+# Supabase API (optional - for using Supabase client features)
+SUPABASE_URL=https://dst-airlines-api.srv869578.hstgr.cloud
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II
+```
+
+## Database Schema Migration
+
+To migrate your existing database schema to Supabase:
+
+```bash
+cd /srv/fev25_cde_projet_airlines
+
+# Execute the migration SQL
+psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres -f database/migrations/1_create_tables.sql
+```
+
+## Managing the Supabase Instance
+
+### Start all services
+```bash
+cd /srv/fev25_cde_projet_airlines/supabase
+docker compose up -d
+```
+
+### Stop all services
+```bash
+cd /srv/fev25_cde_projet_airlines/supabase
+docker compose down
+```
+
+### View logs
+```bash
+cd /srv/fev25_cde_projet_airlines/supabase
+docker compose logs -f [service_name]
+```
+
+Available services:
+- `db` - PostgreSQL database
+- `studio` - Supabase Studio UI
+- `kong` - API Gateway
+- `rest` - PostgREST (auto-generated REST API)
+- `realtime` - Real-time subscriptions
+- `storage` - File storage
+- `analytics` - Logs and analytics
+- `pooler` - Connection pooler
+- `meta` - Database metadata service
+
+### Check service status
+```bash
+docker ps --filter "name=dst-airlines-supabase"
+```
+
+## Services Status
+
+Currently running services:
+- ✅ Database (PostgreSQL 15)
+- ✅ Studio (Web Interface)
+- ✅ Kong (API Gateway)
+- ✅ REST API (PostgREST)
+- ✅ Realtime
+- ✅ Storage
+- ✅ Analytics
+- ✅ Connection Pooler
+- ✅ Metadata Service
+- ⚠️ Auth (experiencing setup issues - can be fixed later)
+- ⚠️ Edge Functions (experiencing setup issues - can be fixed later)
+
+**Note**: The Auth and Edge Functions services are having initialization issues but are not required for basic database operations and REST API usage. These can be addressed later if needed.
+
+## Features Available
+
+### 1. REST API
+Automatically generated REST API for all your database tables:
+```bash
+# Get all records from a table
+curl -X GET 'https://dst-airlines-api.srv869578.hstgr.cloud/rest/v1/airlines' \
+  -H "apikey: YOUR_ANON_KEY" \
+  -H "Authorization: Bearer YOUR_ANON_KEY"
+```
+
+### 2. Real-time Subscriptions
+Subscribe to database changes in real-time (useful for live updates).
+
+### 3. File Storage
+Store and serve files (images, documents, etc.) with built-in CDN and image transformations.
+
+### 4. Database Management
+Use Supabase Studio to:
+- Create and modify tables
+- Run SQL queries
+- View database schema
+- Manage users and permissions
+- Monitor API usage
+
+## Security Best Practices
+
+1. **Never commit credentials to Git** - The `.env` file is already in `.gitignore`
+2. **Use connection pooling** (port 6544) for production applications
+3. **Use Row Level Security (RLS)** policies to secure your data
+4. **Rotate keys periodically** - Can be done by updating JWT_SECRET and regenerating keys
+5. **Use the anon key** for client-side apps, service key only for server-side
+
+## Backup and Maintenance
+
+### Manual Backup
+```bash
+# Create backup
+pg_dump -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres > backup_$(date +%Y%m%d).sql
+
+# Restore from backup
+psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres < backup_20251123.sql
+```
+
+### Automated Backups
+Consider setting up a cron job for regular backups:
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 2 AM
+0 2 * * * /path/to/backup_script.sh
+```
+
+## Troubleshooting
+
+### Connection Issues
+```bash
+# Test database connection
+psql -h srv869578.hstgr.cloud -p 5433 -U postgres -d postgres -c "SELECT version();"
+
+# Check if services are running
+docker ps --filter "name=dst-airlines-supabase"
+
+# View service logs
+docker logs dst-airlines-supabase-db
+```
+
+### Restart Services
+```bash
+cd /srv/fev25_cde_projet_airlines/supabase
+docker compose restart [service_name]
+```
+
+## Support
+
+For issues or questions about:
+- **Supabase features**: https://supabase.com/docs
+- **PostgreSQL**: https://www.postgresql.org/docs/
+- **PostgREST API**: https://postgrest.org/en/stable/
+
+## Next Steps
+
+1. Access Supabase Studio and verify the connection
+2. Run the database migration script to create your tables
+3. Update your application's `.env` file with the new connection details
+4. Test the connection from your application
+5. Share the Studio credentials with your colleagues
+
+---
+
+**Created**: November 23, 2025
+**Location**: `/srv/fev25_cde_projet_airlines/supabase/`
+**Configuration**: `/srv/fev25_cde_projet_airlines/supabase/.env`

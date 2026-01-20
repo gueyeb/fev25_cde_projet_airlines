@@ -5,8 +5,16 @@ from tqdm import tqdm
 from src.utils.pg_functions import getAirPorts
 from src.utils.pg_functions import insert_dataframe
 
-airports_df = getAirPorts()
-def create_routes(airports_df, batch_size=10000):
+
+def create_routes(airports_df=None, batch_size=10000):
+    """Create routes between airports with distance calculations.
+
+    Args:
+        airports_df: DataFrame of airports. If None, fetches from database.
+        batch_size: Number of routes to insert per batch.
+    """
+    if airports_df is None:
+        airports_df = getAirPorts()
     routes = []
     airports_list = list(airports_df.itertuples(index=False))
 
@@ -36,3 +44,7 @@ def create_routes(airports_df, batch_size=10000):
     if routes:
         routes_df = pd.DataFrame(routes)
         insert_dataframe(routes_df, 'routes')
+
+
+if __name__ == "__main__":
+    create_routes()

@@ -221,3 +221,13 @@ coverage.xml
 # Backups
 backups/
 supabase/volumes/
+
+# Production deployment files (stored at /root/ on VPS, not in repo)
+# These are environment-specific and should be created by the deployer
+archive/docker-compose.supabase.yml
+archive/docker-compose.local.yml
+archive/docker-compose.prod.yml
+archive/deploy-dst-airlines.sh
+
+# Supabase docker-compose (tracked separately)
+supabase/docker-compose.yml

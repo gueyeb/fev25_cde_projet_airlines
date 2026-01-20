@@ -138,38 +138,47 @@ MONGO_DB=dst_airlines
 
 Le projet supporte deux modes de déploiement :
 
-#### Mode Production (VPS avec Supabase externe)
+#### Mode Production (VPS avec Docker Compose)
+
+Sur le serveur VPS, les services sont orchestrés via Docker Compose avec Traefik :
 
 ```bash
-# Démarrer tous les services
-./deploy-dst-airlines.sh start
+# Depuis /root sur le VPS
+docker compose -f docker-compose.dst-airlines.yml up -d
 
 # Vérifier le statut
-./deploy-dst-airlines.sh status
+docker compose -f docker-compose.dst-airlines.yml ps
 
 # Voir les logs
-./deploy-dst-airlines.sh logs
+docker compose -f docker-compose.dst-airlines.yml logs -f
 
-# Arrêter / Redémarrer
-./deploy-dst-airlines.sh stop
-./deploy-dst-airlines.sh restart
+# Arrêter
+docker compose -f docker-compose.dst-airlines.yml down
+
+# Rebuild après modifications
+docker compose -f docker-compose.dst-airlines.yml up -d --build
 ```
 
-#### Mode Local (laptop avec PostgreSQL intégré)
+Les services Prefect (server + agent avec worker) démarrent automatiquement et les flows sont servis avec leurs planifications.
 
-Pour tester sur un laptop sans dépendance externe :
+#### Mode Local (laptop avec PostgreSQL local)
+
+Pour le développement local sur un laptop :
 
 ```bash
-# Démarrer les services locaux (inclut PostgreSQL)
-./deploy-dst-airlines.sh start-local
+# 1. Démarrer PostgreSQL local via docker-compose.yml du projet
+cd /srv/fev25_cde_projet_airlines
+docker compose up -d
 
-# Autres commandes locales
-./deploy-dst-airlines.sh status-local
-./deploy-dst-airlines.sh logs-local
-./deploy-dst-airlines.sh stop-local
-./deploy-dst-airlines.sh rebuild-local
-./deploy-dst-airlines.sh clean-local
+# 2. Exécuter le pipeline complet (SANS Prefect)
+./run_project.sh --env=host
+
+# 3. OU pour tester les flows Prefect interactivement
+./test_flow.sh
 ```
+
+**Important**: `run_project.sh` exécute directement les jobs Python sans Prefect.
+Pour tester les flows Prefect en local, utilisez `./test_flow.sh`.
 
 **Configuration DB personnalisée** (optionnel) :
 
@@ -180,10 +189,10 @@ export PG_PORT=5432
 export PG_USER=postgres
 export PG_PASSWORD=mon_mot_de_passe
 export PG_DB=postgres
-./deploy-dst-airlines.sh start-local
+./run_project.sh --env=prod
 ```
 
-Par défaut : `postgres:localdev@localhost:5432/postgres`
+Par défaut (mode host) : `postgres:localdev@localhost:5432/postgres`
 
 ### 4. Initialisation de la base de données
 
@@ -200,12 +209,19 @@ Ce script crée automatiquement :
 
 ### 5. Déploiement des workflows Prefect
 
+**Production (VPS)** : Les flows sont automatiquement servis au démarrage du conteneur `dst-airlines-prefect-agent`.
+
+**Local** : Pour servir les flows manuellement :
+
 ```bash
-# Déployer tous les flows avec leurs planifications
-./deploy-dst-airlines.sh deploy-flows
+# Depuis le conteneur Prefect agent
+docker exec -it dst-airlines-prefect-agent python -m prefect_flows.deploy_flows --mode=serve
+
+# OU pour exécuter un flow immédiatement (sans planification)
+docker exec -it dst-airlines-prefect-agent python -m prefect_flows.deploy_flows --mode=run --flow=reference
 ```
 
-Les flows seront automatiquement exécutés selon leur planification.
+Les flows seront automatiquement exécutés selon leur planification (voir tableau ci-dessous).
 
 ## 🔄 Workflows Prefect (Orchestration automatisée)
 
@@ -318,8 +334,8 @@ docker logs --tail 100 dst-airlines-prefect-agent
 # Avec timestamps
 docker logs -f --timestamps dst-airlines-prefect-agent
 
-# Logs du serveur Prefect
-./deploy-dst-airlines.sh logs-prefect
+# Logs du serveur Prefect (production VPS)
+docker compose -f /root/docker-compose.dst-airlines.yml logs -f prefect-server
 ```
 
 ### Routes importantes
@@ -625,8 +641,8 @@ docker ps | grep prefect
 # Vérifier les logs
 docker logs dst-airlines-prefect-agent
 
-# Redémarrer les services
-./deploy-dst-airlines.sh restart
+# Redémarrer les services (production VPS)
+docker compose -f /root/docker-compose.dst-airlines.yml restart prefect-server prefect-agent
 ```
 
 ### Erreur de connexion à la base de données
@@ -665,14 +681,16 @@ Les flows incluent une gestion automatique des erreurs de rate limiting avec :
 ### Vérifier l'état global du système
 
 ```bash
-# Statut de tous les services
-./deploy-dst-airlines.sh status
+# Statut de tous les services (production VPS)
+docker compose -f /root/docker-compose.dst-airlines.yml ps
 
 # Vérifier la santé de l'application
 curl http://localhost:8001/api/health
+# Production: curl https://dst-airlines.srv869578.hstgr.cloud/api/health
 
 # Vérifier Prefect
 curl http://localhost:4201/api/health
+# Production: curl https://dst-prefect.srv869578.hstgr.cloud/api/health
 ```
 
 ## 🔑 APIs et authentification
@@ -720,28 +738,46 @@ curl http://localhost:4201/api/health
 ## 📝 Commandes utiles
 
 ```bash
-# Production (VPS + Supabase)
-./deploy-dst-airlines.sh start        # Démarrer
-./deploy-dst-airlines.sh stop         # Arrêter
-./deploy-dst-airlines.sh restart      # Redémarrer
-./deploy-dst-airlines.sh status       # Statut
-./deploy-dst-airlines.sh logs         # Logs
-./deploy-dst-airlines.sh rebuild      # Rebuild
-./deploy-dst-airlines.sh deploy-flows # Déployer workflows Prefect
+# ========================================
+# PRODUCTION (VPS avec Docker Compose)
+# ========================================
+# Depuis /root sur le VPS
+docker compose -f docker-compose.dst-airlines.yml up -d      # Démarrer
+docker compose -f docker-compose.dst-airlines.yml down       # Arrêter
+docker compose -f docker-compose.dst-airlines.yml restart    # Redémarrer
+docker compose -f docker-compose.dst-airlines.yml ps         # Statut
+docker compose -f docker-compose.dst-airlines.yml logs -f    # Logs
+docker compose -f docker-compose.dst-airlines.yml up -d --build  # Rebuild
 
-# Local (laptop + PostgreSQL intégré)
-./deploy-dst-airlines.sh start-local  # Démarrer en local
-./deploy-dst-airlines.sh stop-local   # Arrêter
-./deploy-dst-airlines.sh status-local # Statut
-./deploy-dst-airlines.sh logs-local   # Logs
-./deploy-dst-airlines.sh rebuild-local # Rebuild
-./deploy-dst-airlines.sh clean-local  # Supprimer volumes
+# ========================================
+# LOCAL (laptop + PostgreSQL intégré)
+# ========================================
+# Pipeline direct (sans Prefect)
+./run_project.sh --env=host           # Exécuter le pipeline complet
+./run_project.sh --env=host --train   # Pipeline + entraînement ML
 
-# Test des flows
+# Test des flows Prefect
 ./test_flow.sh                        # Menu interactif
 
-# Initialisation
-./scripts/utils/init_database.sh      # Créer les tables
+# Docker Compose local
+docker compose up -d                  # Démarrer PostgreSQL local
+docker compose down                   # Arrêter
+docker compose logs -f                # Logs
+
+# ========================================
+# PREFECT (exécution manuelle des flows)
+# ========================================
+docker exec dst-airlines-prefect-agent prefect deployment ls  # Lister deployments
+docker exec dst-airlines-prefect-agent prefect flow-run ls    # Lister exécutions
+
+# Exécuter un flow via deployment
+docker exec dst-airlines-prefect-agent \
+  prefect deployment run 'reference_data_sync_flow/weekly-reference-sync'
+
+# ========================================
+# UTILITAIRES
+# ========================================
+./scripts/utils/init_database.sh      # Créer les tables (mode local)
 
 # Docker
 docker ps                             # Conteneurs actifs
@@ -775,7 +811,7 @@ def mon_flow():
 1. Créer le fichier dans `prefect_flows/`
 2. Définir les tasks et le flow
 3. Ajouter le deployment dans `deploy_flows.py`
-4. Redéployer : `./deploy-dst-airlines.sh deploy-flows`
+4. Redéployer : `docker compose -f /root/docker-compose.dst-airlines.yml restart prefect-agent`
 
 ### Tests locaux
 
@@ -817,7 +853,7 @@ Ce projet est développé dans le cadre académique de la formation Data Enginee
 
 Pour toute question ou problème :
 
-1. Vérifier les logs : `./deploy-dst-airlines.sh logs`
+1. Vérifier les logs : `docker compose -f /root/docker-compose.dst-airlines.yml logs -f`
 2. Consulter la documentation dans `/docs`
 3. Contacter l'équipe de développement
 

@@ -1,13 +1,25 @@
 apiVersion: 1
 
+# DST Airlines Grafana Datasources
+# Works in both local (docker-compose.yml) and production (docker-compose.dst-airlines.yml)
+# Service names resolve via Docker Compose networking
+
 datasources:
+  # Prometheus - Metrics
   - name: Prometheus
     type: prometheus
     access: proxy
+    # Uses compose service name - works in both environments
+    # Local: prometheus:9090, Production: prometheus:9090 (same service name in compose)
     url: http://prometheus:9090
     isDefault: true
+    jsonData:
+      timeInterval: "15s"
 
+  # Loki - Logs
   - name: Loki
     type: loki
     access: proxy
     url: http://loki:3100
+    jsonData:
+      maxLines: 1000

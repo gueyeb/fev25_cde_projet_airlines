@@ -1,19 +1,67 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
+# DST Airlines Monitoring Configuration
+# Works in both local development and production environments
+# Service names are resolved via Docker Compose networking
 
 scrape_configs:
+  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+        labels:
+          project: 'dst-airlines'
 
-  - job_name: 'dst-airlines-backend'
+  # FastAPI Web Application
+  # Local: backend service from docker-compose.yml
+  # Production: web-app service from docker-compose.dst-airlines.yml
+  - job_name: 'dst-web-app'
     metrics_path: '/metrics'
-    scrape_interval: 5s
+    scrape_interval: 15s
     static_configs:
-      - targets: ['dst-airlines-backend:8000']
-    # Note: 'dst-airlines-backend' must be reachable. 
-    # If running in separate networks, we might need to adjust this.
+      # Production container name
+      - targets: ['dst-airlines-web:8000']
+        labels:
+          service: 'fastapi'
+          project: 'dst-airlines'
+          env: 'production'
+      # Local development container name (from original compose)
+      - targets: ['backend:8000']
+        labels:
+          service: 'fastapi'
+          project: 'dst-airlines'
+          env: 'local'
 
+  # Prefect Workflow Orchestration
+  # Note: Prefect 3.x doesn't expose Prometheus metrics by default
+  # Health is monitored via Grafana dashboard probes or Prefect UI
+  # Uncomment below if using a metrics exporter for Prefect
+  # - job_name: 'dst-prefect'
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 30s
+  #   static_configs:
+  #     - targets: ['prefect-server:4200']
+  #       labels:
+  #         service: 'prefect'
+  #         project: 'dst-airlines'
+
+  # Container metrics via cAdvisor
+  # Production: dst-cadvisor, Local: cadvisor
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+        labels:
+          project: 'dst-airlines'
+          env: 'local'
+      - targets: ['dst-cadvisor:8080']
+        labels:
+          project: 'dst-airlines'
+          env: 'production'
+
+  # PostgreSQL (Supabase) - production only
+  # Note: Requires postgres_exporter for actual metrics
+  # - job_name: 'supabase-postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
