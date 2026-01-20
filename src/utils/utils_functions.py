@@ -2,6 +2,7 @@ import time
 from typing import Any, Optional
 from urllib.parse import urlparse, parse_qs
 from typing import Callable, Optional
+from threading import Lock
 
 from src.utils.weather_functions import *
 from src.utils.pg_functions import table_count
@@ -14,24 +15,142 @@ AUTH_URL = f"{BASE_URL}/oauth/token"
 CLIENT_ID = os.getenv("LH_CLIENT_ID")
 CLIENT_SECRET = os.getenv("LH_CLIENT_SECRET")
 
+# Token cache for reusing tokens
+_token_cache = {
+    "token": None,
+    "expires_at": 0
+}
+_token_lock = Lock()
+
+# Rate limiting configuration
+RATE_LIMIT_CONFIG = {
+    "request_delay_ms": 250,      # Delay between requests in milliseconds
+    "rate_limit_wait_base": 5,    # Base wait time on rate limit (seconds)
+    "rate_limit_max_wait": 60,    # Max wait time on rate limit (seconds)
+    "rate_limit_max_retries": 5,  # Max retries on rate limit
+}
+
+
 def get_first_root_key(full_key: str) -> str:
     return full_key.split('.')[0]
 
-# Fonction pour récupérer le token d'accès
-def get_api_key():
-    payload = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "client_credentials"
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    response = requests.post(AUTH_URL, data=payload, headers=headers)
-    response.raise_for_status()
-    return response.json()["access_token"]
 
-def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, MAX_CONSECUTIVE_404_ERROR_RETRY = 1):
+def get_api_key(force_refresh: bool = False):
+    """
+    Get Lufthansa API access token with caching.
+    Tokens are cached and reused until they expire.
+
+    Args:
+        force_refresh: Force getting a new token even if cached one is valid
+
+    Returns:
+        Access token string
+    """
+    global _token_cache
+
+    with _token_lock:
+        current_time = time.time()
+
+        # Return cached token if still valid (with 60s buffer)
+        if not force_refresh and _token_cache["token"] and _token_cache["expires_at"] > current_time + 60:
+            return _token_cache["token"]
+
+        # Get new token
+        payload = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "client_credentials"
+        }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        response = requests.post(AUTH_URL, data=payload, headers=headers)
+        response.raise_for_status()
+
+        token_data = response.json()
+        _token_cache["token"] = token_data["access_token"]
+        # expires_in is typically 86400 (24 hours), cache with buffer
+        expires_in = token_data.get("expires_in", 86400)
+        _token_cache["expires_at"] = current_time + expires_in
+
+        return _token_cache["token"]
+
+
+def _wait_with_backoff(attempt: int, base_wait: float = 5, max_wait: float = 60) -> float:
+    """
+    Calculate and execute exponential backoff wait.
+
+    Args:
+        attempt: Current attempt number (0-indexed)
+        base_wait: Base wait time in seconds
+        max_wait: Maximum wait time in seconds
+
+    Returns:
+        Actual wait time used
+    """
+    wait_time = min(base_wait * (2 ** attempt), max_wait)
+    print(f"[RATE LIMIT] Waiting {wait_time}s before retry (attempt {attempt + 1})...")
+    time.sleep(wait_time)
+    return wait_time
+
+
+def _handle_rate_limit_response(resp, attempt: int) -> bool:
+    """
+    Check if response indicates rate limiting and handle it.
+
+    Args:
+        resp: Response object
+        attempt: Current attempt number
+
+    Returns:
+        True if rate limited and should retry, False otherwise
+    """
+    if resp.status_code == 429:
+        print(f"[RATE LIMIT] HTTP 429 - Too Many Requests")
+        return True
+
+    if resp.status_code == 403:
+        try:
+            error_data = resp.json() if resp.text else {}
+            error_msg = error_data.get("Error", resp.text)
+            if "Over Queries Per Second" in str(error_msg) or "Over Qps" in str(error_msg):
+                print(f"[RATE LIMIT] HTTP 403 - {error_msg}")
+                return True
+        except:
+            pass
+
+    return False
+
+def fetch_paginated(
+    endpoint,
+    root_key,
+    limit=20,
+    max_items=None,
+    request_delay_ms=None,
+    max_rate_limit_retries=None,
+    max_consecutive_404=2
+):
+    """
+    Fetch paginated data from Lufthansa API with proper rate limiting.
+
+    Args:
+        endpoint: API endpoint (e.g., "/mds-references/airports")
+        root_key: JSON path to data (e.g., "AirportResource.Airports.Airport")
+        limit: Items per page (default 20)
+        max_items: Maximum total items to fetch (None = unlimited)
+        request_delay_ms: Delay between requests in ms (default from config)
+        max_rate_limit_retries: Max retries on rate limit (default from config)
+        max_consecutive_404: Max consecutive 404s before stopping
+
+    Returns:
+        List of fetched items
+    """
+    # Use config defaults if not specified
+    if request_delay_ms is None:
+        request_delay_ms = RATE_LIMIT_CONFIG["request_delay_ms"]
+    if max_rate_limit_retries is None:
+        max_rate_limit_retries = RATE_LIMIT_CONFIG["rate_limit_max_retries"]
 
     results = []
     token = get_api_key()
@@ -43,36 +162,72 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
     }
 
     current_offset = 0
-
+    consecutive_404_count = 0
     next_url = f"{BASE_URL}{endpoint}?limit={limit}&offset={current_offset}"
 
     while next_url:
+        # Check if we've reached max_items
+        if max_items and len(results) >= max_items:
+            print(f"[INFO] Reached max_items limit ({max_items}), stopping.")
+            break
+
         print(f"[REQUEST] Requête : {next_url}")
-        retries = 0
-        while retries <= max_retries:
-            resp = requests.get(next_url, headers=headers)
-            if resp.status_code == 429:
-                print(f"[WAIT] Trop de requêtes (429), attente {retry_wait}s...")
-                time.sleep(retry_wait)
-                retries += 1
+
+        # Rate limit handling with exponential backoff
+        rate_limit_attempt = 0
+        resp = None
+
+        while rate_limit_attempt <= max_rate_limit_retries:
+            resp = requests.get(next_url, headers=headers, timeout=30)
+
+            # Handle 401 - token expired
+            if resp.status_code == 401:
+                print("[AUTH] Token expired, refreshing...")
+                token = get_api_key(force_refresh=True)
+                headers["Authorization"] = f"Bearer {token}"
+                resp = requests.get(next_url, headers=headers, timeout=30)
+
+            # Check for rate limiting (403 or 429)
+            if _handle_rate_limit_response(resp, rate_limit_attempt):
+                if rate_limit_attempt < max_rate_limit_retries:
+                    _wait_with_backoff(
+                        rate_limit_attempt,
+                        RATE_LIMIT_CONFIG["rate_limit_wait_base"],
+                        RATE_LIMIT_CONFIG["rate_limit_max_wait"]
+                    )
+                    rate_limit_attempt += 1
+                    continue
+                else:
+                    print(f"[ERROR] Max rate limit retries ({max_rate_limit_retries}) exceeded, stopping.")
+                    break
             else:
+                # Not rate limited, proceed
                 break
 
+        # Check if we exhausted rate limit retries
+        if rate_limit_attempt > max_rate_limit_retries:
+            break
+
+        # Handle 404
         if resp.status_code == 404:
             print(f"[WARNING] Page ignorée (404 Not Found) : {next_url}")
+            consecutive_404_count += 1
+            if consecutive_404_count >= max_consecutive_404:
+                print(f"[STOP] {max_consecutive_404} consecutive 404s, stopping pagination.")
+                break
             current_offset = extract_offset_from_url(next_url) + limit
             next_url = f"{BASE_URL}{endpoint}?limit={limit}&offset={current_offset}"
-            MAX_CONSECUTIVE_404_ERROR_RETRY -= 1
-            if MAX_CONSECUTIVE_404_ERROR_RETRY == 0:
-                print("[STOP] Trop de 404 consécutifs, arrêt de la pagination.")
-                break
-            else:
-                continue
-        elif resp.status_code != 200:
+            # Add delay even on 404
+            time.sleep(request_delay_ms / 1000.0)
+            continue
+
+        # Handle other errors
+        if resp.status_code != 200:
             print(f"[ERROR] Erreur HTTP {resp.status_code} : {resp.text}")
             break
 
-        MAX_CONSECUTIVE_404_ERROR_RETRY = 2
+        # Reset 404 counter on success
+        consecutive_404_count = 0
 
         try:
             data = resp.json()
@@ -80,33 +235,34 @@ def fetch_paginated(endpoint, root_key, limit=20, max_retries=3, retry_wait=10, 
             print(f"[WARNING] Réponse non-JSON reçue sur : {next_url}")
             break
 
-        # Extraction des données
+        # Extract data from response
         batch = data
         for key in root_key.split('.'):
             batch = batch.get(key, {})
         if isinstance(batch, dict):
             batch = list(batch.values())
         if not batch:
-            print("[WARNING] Aucune donnée trouvée à ce niveau.")
+            print("[INFO] No more data, pagination complete.")
             break
 
         results.extend(batch)
         print(f"[INFO] {len(batch)} éléments ajoutés — total : {len(results)}")
 
-        # Suivre les liens de pagination (uniquement si encore autorisé)
-        if MAX_CONSECUTIVE_404_ERROR_RETRY > 0:
-            next_url = None
-            try:
-                links = data.get(first_root_key, {}).get("Meta", {}).get("Link", [])
-                for link in links:
-                    if link.get("@Rel") == "next":
-                        next_url = link.get("@Href")
-                        break
-            except Exception as e:
-                print(f"[WARNING] Erreur de parsing Meta.Link : {e}")
-                break
-        else:
+        # Follow pagination links
+        next_url = None
+        try:
+            links = data.get(first_root_key, {}).get("Meta", {}).get("Link", [])
+            for link in links:
+                if link.get("@Rel") == "next":
+                    next_url = link.get("@Href")
+                    break
+        except Exception as e:
+            print(f"[WARNING] Erreur de parsing Meta.Link : {e}")
             break
+
+        # Add delay between requests to respect rate limits
+        if next_url:
+            time.sleep(request_delay_ms / 1000.0)
 
     print(f"[SUCCESS] Récupération terminée : {len(results)} éléments totaux.")
     return results
@@ -122,21 +278,6 @@ def extract_offset_from_url(url):
     if offset_values:
         return int(offset_values[0])
     return None
-
-
-# Fonction pour récupérer le token d'accès
-def get_api_key():
-    payload = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "client_credentials"
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    response = requests.post(AUTH_URL, data=payload, headers=headers)
-    response.raise_for_status()
-    return response.json()["access_token"]
 
 
 def parse_any(iso_str, sched_date, sched_time):
@@ -215,7 +356,7 @@ def fetch_schedules(endpoint: str, root_key: Optional[str], limit=100, offset=0)
 
         # Si expiré: on redemande un token et on retente UNE fois
         if resp.status_code == 401:
-            token = get_api_key()
+            token = get_api_key(force_refresh=True)
             headers["Authorization"] = f"Bearer {token}"
             resp = requests.get(url, headers=headers, timeout=25)
 
@@ -305,7 +446,7 @@ def get_total_count(endpoint: str, meta_totalcount_path: str) -> Optional[int]:
 
     resp = requests.get(url, headers=headers, timeout=25)
     if resp.status_code == 401:
-        token = get_api_key()
+        token = get_api_key(force_refresh=True)
         headers["Authorization"] = f"Bearer {token}"
         resp = requests.get(url, headers=headers, timeout=25)
 
