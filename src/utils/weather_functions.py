@@ -137,15 +137,16 @@ def get_airport_from_postgres_byAirPortCode(iata_code: str):
                 )
                 row = cur.fetchone()
                 if row:
-                    iata, lat, lon, timezone = row[0], row[1], row[2], row[3]
+                    iata, lat, lon, tz = row[0], row[1], row[2], row[3]
                     # Cast propre (au cas où)
                     try:
                         lat = float(lat)
                         lon = float(lon)
-                        timezone = str(timezone)
+                        # Don't convert None to string "None"
+                        tz = str(tz) if tz else None
                     except Exception:
                         return None
-                    return {"iata_code": iata, "lat": lat, "lon": lon, "timezone": timezone}
+                    return {"iata_code": iata, "lat": lat, "lon": lon, "timezone": tz}
         return None
     except Exception as e:
         # Log minimal; tu peux remplacer par logging.warning(...)
