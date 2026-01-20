@@ -46,8 +46,6 @@ def get_api_key(force_refresh: bool = False):
     Returns:
         Access token string
     """
-    global _token_cache
-
     with _token_lock:
         current_time = time.time()
 
