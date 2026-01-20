@@ -20,7 +20,7 @@ HUBS = {
     "europe_secondary": ["ATH", "BUD", "GVA", "DUS"],
 
     # Major US hubs (transatlantic routes)
-    "usa": ["JFK", "LAX", "ORD", "ATL", "DFW", "MIA", "SFO", "BOS", "IAD", "EWR"],
+    "usa": ["JFK", "LAX", "ORD", "ATL", "DFW", "MIA", "SFO", "BOS", "IAD", "EWR", "DEN", "DTW"],
 
     # Major Asian hubs (long-haul routes)
     "asia": ["NRT", "HND", "PEK", "PVG", "HKG", "SIN", "ICN", "BKK", "DXB", "DOH"],

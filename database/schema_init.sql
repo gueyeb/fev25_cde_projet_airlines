@@ -100,6 +100,9 @@ CREATE TABLE IF NOT EXISTS public.bts_flight_history (
     late_aircraft_delay integer
 );
 
+-- Create indexes for bts_flight_history
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bts_unique_record ON bts_flight_history USING btree (year, month, carrier, airport);
+
 -- 8. Lufthansa Flight History (depends on routes, airlines, aircrafts)
 CREATE TABLE IF NOT EXISTS public.lufthansa_flight_history (
     id integer primary key not null default nextval('lufthansa_flight_history_id_seq'::regclass),
@@ -168,6 +171,12 @@ CREATE TABLE IF NOT EXISTS public.historical_flights (
     foreign key (lufthansa_data_history_id) references public.lufthansa_flight_history (id)
         match simple on update no action on delete no action
 );
+
+-- Create unique indexes for historical_flights source IDs (prevent duplicate imports)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_historical_flights_bts_unique
+    ON historical_flights (bts_data_history_id) WHERE bts_data_history_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_historical_flights_lufthansa_unique
+    ON historical_flights (lufthansa_data_history_id) WHERE lufthansa_data_history_id IS NOT NULL;
 
 -- 10. Weather cache
 CREATE TABLE IF NOT EXISTS weather_hourly_cache (
