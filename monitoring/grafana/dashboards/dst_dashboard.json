@@ -106,7 +106,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "up{job=\"dst-web-app\"}",
+          "expr": "max(up{job=\"dst-web-app\"})",
           "legendFormat": "Web App",
           "range": true,
           "refId": "A"
@@ -185,7 +185,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "up{job=\"dst-prefect\"}",
+          "expr": "clamp_max(count(container_memory_usage_bytes{name=~\"dst-airlines-prefect.*\"}) or vector(0), 1)",
           "legendFormat": "Prefect",
           "range": true,
           "refId": "A"
