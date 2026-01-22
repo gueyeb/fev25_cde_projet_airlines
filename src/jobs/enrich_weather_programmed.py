@@ -107,7 +107,9 @@ def _prefill_cache_one_airport_one_day(cur, iata: str, day_local_ts):
     if not ap:
         return 0
 
-    lat, lon, tz = ap["lat"], ap["lon"], ap["timezone"] or "UTC"
+    lat, lon = ap["lat"], ap["lon"]
+    # Handle None, empty, or literal "None" string - default to UTC
+    tz = ap["timezone"] if ap["timezone"] and ap["timezone"] != "None" else "UTC"
 
     # Un (1) appel OWM côté code métier ; la réservation quota se fait dans fetch_hourly_series()
     series = fetch_hourly_series(lat, lon, lang="fr")
@@ -278,6 +280,84 @@ def enrich_weather_for_date(target_date_str: str, daily_budget: int = OWM_DAILY_
             conn.commit()
 
     print(f"[weather] Enrichissement terminé pour {target_date_str} (préremplis={processed}, budget_initial={effective_budget}).")
+
+
+def prefill_weather_cache_for_routes(target_date_str: str, daily_budget: int = OWM_DAILY_BUDGET):
+    """
+    Pre-fill weather cache for ALL airports in important routes for a given date.
+
+    This should run BEFORE sync_flight_history to ensure weather data is already
+    in cache when flights are inserted. Much more efficient than individual calls:
+    - 1 API call per airport returns ~40 forecast points (5 days of 3-hour intervals)
+    - For 104 airports, we need ~104 API calls instead of ~1654 (one per hour-bucket)
+
+    Args:
+        target_date_str: Date in YYYY-MM-DD format
+        daily_budget: Maximum API calls to use
+    """
+    target_date = datetime.fromisoformat(target_date_str).date()
+
+    # Check remaining budget
+    remaining_db = owm_budget_remaining()
+    effective_budget = min(daily_budget, remaining_db)
+
+    if effective_budget <= 0:
+        print(f"[weather] Budget OWM épuisé (reste={remaining_db}). Prefill ignoré pour {target_date_str}.")
+        return 0
+
+    with psycopg2.connect(**PG_CONN_INFO) as conn:
+        conn.autocommit = False
+        with conn.cursor() as cur:
+            # Get all unique airports from important routes
+            cur.execute("""
+                SELECT DISTINCT airport, a.timezone
+                FROM (
+                    SELECT departure_airport as airport FROM routes WHERE important = true
+                    UNION
+                    SELECT arrival_airport as airport FROM routes WHERE important = true
+                ) r
+                JOIN airports a ON a.iata_code = r.airport
+                WHERE a.latitude IS NOT NULL AND a.longitude IS NOT NULL
+                ORDER BY airport
+            """)
+            airports = cur.fetchall()
+
+            # Create a timestamp for the target date at midnight UTC
+            day_local_ts = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=ZoneInfo("UTC"))
+
+            processed = 0
+            for iata, tz in airports:
+                if processed >= effective_budget:
+                    print(f"[weather] Budget limit reached ({effective_budget}). Stopping prefill.")
+                    break
+
+                # Check live budget (other processes may consume)
+                if owm_budget_remaining() <= 0:
+                    print(f"[weather] Budget OWM épuisé en cours. Stop prefill (processed={processed}).")
+                    break
+
+                # Check if we already have cache entries for this airport+date
+                cur.execute("""
+                    SELECT COUNT(*) FROM weather_hourly_cache
+                    WHERE iata_code = %s
+                    AND hour_local >= %s
+                    AND hour_local < %s + interval '1 day'
+                """, (iata, target_date, target_date))
+                existing = cur.fetchone()[0]
+
+                if existing >= 8:  # Already have enough hours cached (3-hour intervals = 8 per day)
+                    continue
+
+                # Pre-fill cache for this airport
+                inserted = _prefill_cache_one_airport_one_day(cur, iata, day_local_ts)
+                if inserted > 0:
+                    processed += 1
+                    print(f"[weather] Prefilled {inserted} hours for {iata}")
+
+            conn.commit()
+
+    print(f"[weather] Prefill terminé pour {target_date_str}: {processed} aéroports traités (budget={effective_budget}).")
+    return processed
 
 
 def _parse_args():

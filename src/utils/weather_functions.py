@@ -142,8 +142,8 @@ def get_airport_from_postgres_byAirPortCode(iata_code: str):
                     try:
                         lat = float(lat)
                         lon = float(lon)
-                        # Don't convert None to string "None"
-                        tz = str(tz) if tz else None
+                        # Don't convert None to string "None", and normalize "None" string to Python None
+                        tz = str(tz) if tz and tz != "None" else None
                     except Exception:
                         return None
                     return {"iata_code": iata, "lat": lat, "lon": lon, "timezone": tz}
@@ -160,6 +160,12 @@ def get_airport_from_postgres_byAirPortCode_cached(iata_code: str):
     Utilise la fonction d'accès Postgres ci-dessous.
     """
     return get_airport_from_postgres_byAirPortCode(iata_code)
+
+
+def clear_airport_cache():
+    """Clear the airport lookup LRU cache to refresh data from database."""
+    get_airport_from_postgres_byAirPortCode_cached.cache_clear()
+
 
 # --- APPEL API OPENWEATHERMAP ---
 
@@ -187,7 +193,7 @@ def fetch_weather_at(lat, lon, target_datetime_local, airport_tz_str=None):
 
         # 1) Local -> aware
         if target_datetime_local.tzinfo is None:
-            tz = ZoneInfo(airport_tz_str) if airport_tz_str else timezone.utc
+            tz = ZoneInfo(airport_tz_str) if _is_valid_tz_str(airport_tz_str) else timezone.utc
             target_local_aware = target_datetime_local.replace(tzinfo=tz)
         else:
             target_local_aware = target_datetime_local
@@ -290,8 +296,13 @@ def fetch_weather_at(lat, lon, target_datetime_local, airport_tz_str=None):
         return None
 
 
+def _is_valid_tz_str(tz_str: str | None) -> bool:
+    """Check if timezone string is valid (not None, empty, or literal 'None')."""
+    return bool(tz_str) and tz_str != "None"
+
+
 def hour_bucket_local(dt_local: datetime, tz_str: str) -> datetime:
-    tz = ZoneInfo(tz_str) if tz_str else timezone.utc
+    tz = ZoneInfo(tz_str) if _is_valid_tz_str(tz_str) else timezone.utc
     aware = dt_local.replace(tzinfo=tz) if dt_local.tzinfo is None else dt_local.astimezone(tz)
     return aware.replace(minute=0, second=0, microsecond=0)
 

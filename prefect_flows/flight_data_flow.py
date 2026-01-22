@@ -15,6 +15,36 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 @task(
+    name="prefill-weather-cache",
+    description="Pre-fill weather cache for all important route airports (efficient bulk API calls)",
+    retries=2,
+    retry_delay_seconds=60,
+    log_prints=True
+)
+def prefill_weather_cache_task(target_date: Optional[str] = None, budget: int = 150):
+    """
+    Pre-fill weather cache for all airports in important routes.
+
+    This runs BEFORE sync_flight_history to ensure weather data is already
+    cached. Uses efficient bulk API calls: 1 call per airport returns ~40
+    forecast points, so ~104 airports need ~104 calls instead of ~1654.
+
+    Args:
+        target_date: Date in YYYY-MM-DD format. If None, uses today.
+        budget: Maximum API calls to use for prefill (default 150 for ~104 airports + buffer)
+    """
+    from src.jobs.enrich_weather_programmed import prefill_weather_cache_for_routes
+
+    if target_date is None:
+        target_date = date.today().isoformat()
+
+    print(f"[INFO] Pre-filling weather cache for {target_date} (budget: {budget})...")
+    processed = prefill_weather_cache_for_routes(target_date_str=target_date, daily_budget=budget)
+    print(f"[SUCCESS] Weather cache pre-filled: {processed} airports processed")
+    return processed
+
+
+@task(
     name="sync-flight-history",
     description="Synchronize flight schedules from Lufthansa API",
     retries=3,
@@ -68,17 +98,19 @@ def enrich_weather_task(target_date: Optional[str] = None, budget: int = 900):
     description="Daily pipeline to sync flight schedules and enrich with weather data",
     log_prints=True
 )
-def daily_flight_data_flow(target_date: Optional[str] = None, weather_budget: int = 900):
+def daily_flight_data_flow(target_date: Optional[str] = None, weather_budget: int = 900, prefill_budget: int = 150):
     """
     Daily flow to sync flight schedules and enrich with weather.
 
     Args:
         target_date: Date in YYYY-MM-DD format. If None, uses today.
-        weather_budget: Daily API call budget for OpenWeatherMap
+        weather_budget: Daily API call budget for OpenWeatherMap enrichment
+        prefill_budget: API call budget for weather cache pre-fill (~104 airports need ~104 calls)
 
     This flow:
-    1. Syncs flight schedules from Lufthansa API for the target date
-    2. Enriches flight data with weather information
+    1. Pre-fills weather cache for all important route airports (efficient bulk calls)
+    2. Syncs flight schedules from Lufthansa API (will find weather in cache)
+    3. Enriches any remaining flight data with weather information
 
     Schedule: Daily at 2:00 AM
     """
@@ -88,12 +120,16 @@ def daily_flight_data_flow(target_date: Optional[str] = None, weather_budget: in
     print(f"[FLOW START] Daily Flight Data Pipeline for {target_date}")
     print("=" * 60)
 
-    # Step 1: Sync flight schedules
-    print("[STEP 1/2] Syncing flight schedules...")
+    # Step 1: Pre-fill weather cache (efficient: 1 API call per airport = ~104 calls for all airports)
+    print("[STEP 1/3] Pre-filling weather cache for important route airports...")
+    prefill_weather_cache_task(target_date=target_date, budget=prefill_budget)
+
+    # Step 2: Sync flight schedules (weather should already be in cache)
+    print("[STEP 2/3] Syncing flight schedules...")
     sync_flight_history_task(target_date=target_date)
 
-    # Step 2: Enrich with weather data
-    print("[STEP 2/2] Enriching with weather data...")
+    # Step 3: Enrich any remaining flights with weather data
+    print("[STEP 3/3] Enriching remaining flights with weather data...")
     enrich_weather_task(target_date=target_date, budget=weather_budget)
 
     print("=" * 60)
@@ -105,14 +141,15 @@ def daily_flight_data_flow(target_date: Optional[str] = None, weather_budget: in
     description="Backfill flight data for a date range",
     log_prints=True
 )
-def backfill_flight_data_flow(start_date: str, end_date: str, weather_budget: int = 900):
+def backfill_flight_data_flow(start_date: str, end_date: str, weather_budget: int = 900, prefill_budget: int = 150):
     """
     Backfill flight data for a range of dates.
 
     Args:
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
-        weather_budget: Daily API call budget for OpenWeatherMap per day
+        weather_budget: Daily API call budget for OpenWeatherMap enrichment per day
+        prefill_budget: API call budget for weather cache pre-fill per day
 
     This is useful for:
     - Initial data load
@@ -140,6 +177,7 @@ def backfill_flight_data_flow(start_date: str, end_date: str, weather_budget: in
 
         # Run daily pipeline for this date
         try:
+            prefill_weather_cache_task(target_date=date_str, budget=prefill_budget)
             sync_flight_history_task(target_date=date_str)
             enrich_weather_task(target_date=date_str, budget=weather_budget)
             print(f"[SUCCESS] Completed {date_str}")
