@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from config.env_loader import load_env
 
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_values, Json
 
 # Reuse DB/API helpers
 from src.utils.weather_functions import (
@@ -137,7 +137,7 @@ def _prefill_cache_one_airport_one_day(cur, iata: str, day_local_ts):
             "visibility":  p.get("visibility"),
             "conditions":  p.get("conditions"),
         }
-        rows.append((iata, bucket, payload))
+        rows.append((iata, bucket, Json(payload)))
 
     if not rows:
         return 0
