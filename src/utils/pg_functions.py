@@ -145,15 +145,23 @@ def getAllLufthansaFlightHistory():
     """
     return pd.read_sql(query, con=engine)
 
+# Lufthansa Group airlines - only these are supported by the flight status API
+LUFTHANSA_GROUP_AIRLINES = ('LH', 'LX', 'OS', 'SN', 'EW', '4Y', 'EN', 'CL', 'WK')
+
+
 def getFlightsToUpdateToday():
     """
     Retourne les vols dont l'arrivée planifiée est aujourd'hui ET qui n'ont pas encore été rafraîchis.
+
+    Note: Only Lufthansa Group airlines (LH, LX, OS, SN, EW, 4Y, EN, CL, WK) are fetched
+    because the Lufthansa flight status API only supports these carriers.
     """
     query = """
     SELECT *
     FROM lufthansa_flight_history
     WHERE arrival_schedule_date = CURRENT_DATE
       AND actuals_refreshed = false
+      AND marketing_carrier_airline_id IN ('LH', 'LX', 'OS', 'SN', 'EW', '4Y', 'EN', 'CL', 'WK')
     """
     return pd.read_sql(query, con=engine)
 
@@ -161,6 +169,11 @@ def getFlightsToUpdateToday():
 def getFlightsToUpdate(days: int = 7):
     """
     Retourne les vols des N derniers jours qui n'ont pas encore été rafraîchis.
+
+    Note: Only Lufthansa Group airlines (LH, LX, OS, SN, EW, 4Y, EN, CL, WK) are fetched
+    because the Lufthansa flight status API only supports these carriers.
+    Other airlines (codeshares like UA, DL, AA) appear in schedules but cannot be
+    queried for actual flight status.
     """
     query = f"""
     SELECT *
@@ -168,6 +181,7 @@ def getFlightsToUpdate(days: int = 7):
     WHERE departure_schedule_date >= CURRENT_DATE - INTERVAL '{days} days'
       AND departure_schedule_date <= CURRENT_DATE
       AND actuals_refreshed = false
+      AND marketing_carrier_airline_id IN ('LH', 'LX', 'OS', 'SN', 'EW', '4Y', 'EN', 'CL', 'WK')
     ORDER BY departure_schedule_date DESC
     """
     return pd.read_sql(query, con=engine)

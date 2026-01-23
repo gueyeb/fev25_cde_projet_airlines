@@ -557,6 +557,7 @@ Le projet déploie les services suivants :
    - URL : https://developer.lufthansa.com
    - Fréquence : Temps réel / Quotidien
    - Limites : Rate limiting (requêtes par seconde)
+   - **Note** : Les données de référence (airlines, airports, etc.) couvrent toutes les compagnies mondiales, mais les statuts de vol en temps réel ne sont disponibles que pour le **Groupe Lufthansa** (LH, LX, OS, SN, EW, 4Y, EN, CL, WK)
 
 2. **OpenWeatherMap API** - Données météo
    - URL : https://openweathermap.org/api
@@ -704,11 +705,29 @@ curl http://localhost:4201/api/health
 **Endpoints utilisés** :
 - `/mds-references/countries` - Pays
 - `/mds-references/cities` - Villes
-- `/mds-references/airlines` - Compagnies
+- `/mds-references/airlines` - Compagnies (toutes les compagnies mondiales)
 - `/mds-references/airports` - Aéroports
 - `/mds-references/aircraft` - Avions
-- `/operations/schedules` - Plannings de vols
-- `/operations/flightstatus` - Statuts en temps réel
+- `/operations/schedules` - Plannings de vols (inclut codeshares)
+- `/operations/flightstatus` - Statuts en temps réel (**Lufthansa Group uniquement**)
+
+**⚠️ Limitation importante - Flight Status API** :
+
+L'endpoint `/operations/flightstatus` ne retourne des données que pour les compagnies du **Groupe Lufthansa** :
+
+| Code | Compagnie |
+|------|-----------|
+| LH | Lufthansa |
+| LX | Swiss |
+| OS | Austrian Airlines |
+| SN | Brussels Airlines |
+| EW | Eurowings |
+| 4Y | Eurowings Discover |
+| EN | Air Dolomiti |
+| CL | Lufthansa CityLine |
+| WK | Edelweiss Air |
+
+L'endpoint `/operations/schedules` retourne **tous les vols** sur une route, y compris les codeshares (UA, DL, AA, etc.), mais seuls les vols Lufthansa Group peuvent être enrichis avec les statuts réels. Les autres compagnies retournent une erreur 404 sur l'endpoint flightstatus.
 
 ### OpenWeatherMap API
 
