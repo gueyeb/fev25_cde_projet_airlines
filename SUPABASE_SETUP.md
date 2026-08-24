@@ -2,14 +2,16 @@
 
 ## Overview
 
-A self-hosted Supabase instance has been set up for the DST Airlines project, providing PostgreSQL database with additional features like REST API, real-time subscriptions, and storage.
+A self-hosted Supabase instance was set up for the DST Airlines project, providing PostgreSQL database with additional features like REST API, real-time subscriptions, and storage.
+
+**⚠️ Note (2026-08): this project's containers have been shut down. The credentials below were redacted after this repo went public — they are no longer valid for a running instance. If this environment is ever revived, generate fresh credentials rather than reusing anything that was previously documented here.**
 
 ## Access Information
 
 ### Supabase Studio (Web Interface)
 - **URL**: https://dst-airlines-studio.srv869578.hstgr.cloud
 - **Username**: `supabase`
-- **Password**: `DSTAirlines2025!Secure`
+- **Password**: `<REDACTED>`
 
 The Studio provides a web interface for:
 - Database management (tables, views, functions)
@@ -32,12 +34,12 @@ Host: srv869578.hstgr.cloud
 Port: 5435
 Database: postgres
 User: postgres
-Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+Password: <REDACTED>
 ```
 
 **Connection String**:
 ```
-postgresql://postgres:d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977@srv869578.hstgr.cloud:5435/postgres
+postgresql://postgres:<REDACTED>@srv869578.hstgr.cloud:5435/postgres
 ```
 
 ### Pooled Connection (via Supavisor) - Internal use only
@@ -46,7 +48,7 @@ For internal services within Docker network:
 Host: srv869578.hstgr.cloud
 Port: 5433 (session mode) or 6544 (transaction mode)
 User: postgres.dst-airlines-tenant
-Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+Password: <REDACTED>
 ```
 
 **Note**: Pooled connections require the tenant ID suffix in the username.
@@ -56,13 +58,13 @@ Password: d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
 ### Anonymous Key (Public)
 For client-side applications:
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II
+<REDACTED>
 ```
 
 ### Service Role Key (Secret)
 For server-side applications (has admin privileges):
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NjM4OTIxMjQsImV4cCI6MzM0MDY5MjEyNH0.JbNwGfUsSbLEAeaZGWwULsk3lK2pCZyO3vA056AXQTo
+<REDACTED>
 ```
 
 **⚠️ Warning**: Never expose the Service Role Key in client-side code!
@@ -74,11 +76,11 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3V
 import psycopg2
 
 conn = psycopg2.connect(
-    host="srv869578.hstgr.cloud",
-    port=5435,
-    database="postgres",
-    user="postgres",
-    password="d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977"
+host="srv869578.hstgr.cloud",
+port=5435,
+database="postgres",
+user="postgres",
+password="<REDACTED>"
 )
 ```
 
@@ -87,7 +89,7 @@ conn = psycopg2.connect(
 from supabase import create_client, Client
 
 url = "https://dst-airlines-api.srv869578.hstgr.cloud"
-key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II"
+key = "<REDACTED>"
 supabase: Client = create_client(url, key)
 
 # Query data
@@ -104,11 +106,11 @@ PG_HOST=srv869578.hstgr.cloud
 PG_PORT=5435
 PG_DB=postgres
 PG_USER=postgres
-PG_PASSWORD=d0e6de882220c43de3d3ef5abf0c31c7c87145f936918938e9a6120458e94977
+PG_PASSWORD=<REDACTED>
 
 # Supabase API (optional - for using Supabase client features)
 SUPABASE_URL=https://dst-airlines-api.srv869578.hstgr.cloud
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzYzODkyMTI0LCJleHAiOjMzNDA2OTIxMjR9.4kYNIMPWketchmSPsOJHvGVPYZDnuR866E4LGZdc_II
+SUPABASE_KEY=<REDACTED>
 ```
 
 ## Database Schema Migration
@@ -160,20 +162,7 @@ docker ps --filter "name=dst-airlines-supabase"
 
 ## Services Status
 
-Currently running services:
-- ✅ Database (PostgreSQL 15)
-- ✅ Studio (Web Interface)
-- ✅ Kong (API Gateway)
-- ✅ REST API (PostgREST)
-- ✅ Realtime
-- ✅ Storage
-- ✅ Analytics
-- ✅ Connection Pooler
-- ✅ Metadata Service
-- ⚠️ Auth (experiencing setup issues - can be fixed later)
-- ⚠️ Edge Functions (experiencing setup issues - can be fixed later)
-
-**Note**: The Auth and Edge Functions services are having initialization issues but are not required for basic database operations and REST API usage. These can be addressed later if needed.
+This instance has been shut down (containers stopped) since the project concluded.
 
 ## Features Available
 
@@ -182,8 +171,8 @@ Automatically generated REST API for all your database tables:
 ```bash
 # Get all records from a table
 curl -X GET 'https://dst-airlines-api.srv869578.hstgr.cloud/rest/v1/airlines' \
-  -H "apikey: YOUR_ANON_KEY" \
-  -H "Authorization: Bearer YOUR_ANON_KEY"
+-H "apikey: YOUR_ANON_KEY" \
+-H "Authorization: Bearer YOUR_ANON_KEY"
 ```
 
 ### 2. Real-time Subscriptions
@@ -202,7 +191,7 @@ Use Supabase Studio to:
 
 ## Security Best Practices
 
-1. **Never commit credentials to Git** - The `.env` file is already in `.gitignore`
+1. **Never commit credentials to Git** - The `.env` file should be in `.gitignore`
 2. **Use connection pooling** (port 6544) for production applications
 3. **Use Row Level Security (RLS)** policies to secure your data
 4. **Rotate keys periodically** - Can be done by updating JWT_SECRET and regenerating keys
@@ -258,11 +247,13 @@ For issues or questions about:
 
 ## Next Steps
 
+This project has concluded; the instance is offline. These steps are kept for reference only.
+
 1. Access Supabase Studio and verify the connection
 2. Run the database migration script to create your tables
 3. Update your application's `.env` file with the new connection details
 4. Test the connection from your application
-5. Share the Studio credentials with your colleagues
+5. Share the Studio credentials with your colleagues via a password manager (never via this file)
 
 ---
 
